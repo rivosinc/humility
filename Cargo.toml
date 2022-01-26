@@ -65,6 +65,7 @@ members = [
     "cmd/resume",
     "cmd/rencm",
     "cmd/rendmp",
+    "cmd/repl",
     "cmd/ringbuf",
     "cmd/sensors",
     "cmd/spctrl",
@@ -168,6 +169,7 @@ scroll = "0.10"
 indicatif = "0.15"
 colored = "2.0.0"
 indexmap = { version = "1.7", features = ["serde-1"] }
+reedline = "0.3.0"
 
 [patch.crates-io]
 libusb1-sys = { git = "https://github.com/rivosinc/rusb", branch = "dev/drew/static_lib_fix" }

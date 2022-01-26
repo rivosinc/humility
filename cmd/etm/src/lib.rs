@@ -6,11 +6,12 @@ use anyhow::{bail, Result};
 use clap::Command as ClapCommand;
 use clap::{CommandFactory, Parser};
 use humility::arch::arm::arm_instr_target;
+use humility::cli::Subcommand;
 use humility::core::Core;
 use humility::hubris::*;
 use humility::warn;
 use humility_cmd::attach_live;
-use humility_cmd::{Archive, Args, Command, RunUnattached};
+use humility_cmd::{Archive, Command};
 use humility_cortex::debug::*;
 use humility_cortex::etm::*;
 use humility_cortex::scs::*;
@@ -555,11 +556,10 @@ fn etmcmd_output(core: &mut dyn Core) -> Result<()> {
     }
 }
 
-fn etmcmd(
-    hubris: &mut HubrisArchive,
-    args: &Args,
-    subargs: &[String],
-) -> Result<()> {
+fn etmcmd(context: &mut humility::ExecutionContext) -> Result<()> {
+    let Subcommand::Other(subargs) = context.cli.cmd.as_ref().unwrap();
+    let hubris = context.archive.as_ref().unwrap();
+
     let subargs = &EtmArgs::try_parse_from(subargs)?;
     let mut rval = Ok(());
 
@@ -589,7 +589,7 @@ fn etmcmd(
     //
     // For all of the other commands, we need to actually attach to the chip.
     //
-    let mut core = attach_live(args, hubris)?;
+    let mut core = attach_live(&context.cli, hubris)?;
     let _info = core.halt()?;
 
     humility::msg!("core halted");
@@ -628,7 +628,7 @@ pub fn init() -> (Command, ClapCommand<'static>) {
         Command::Unattached {
             name: "etm",
             archive: Archive::Required,
-            run: RunUnattached::Args(etmcmd),
+            run: etmcmd,
         },
         EtmArgs::command(),
     )

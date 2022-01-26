@@ -10,19 +10,14 @@
 use anyhow::Result;
 use clap::Command as ClapCommand;
 use clap::{CommandFactory, Parser};
-use humility::core::Core;
-use humility::hubris::*;
-use humility_cmd::{Archive, Attach, Command, Run, Validate};
+use humility_cmd::{Archive, Attach, Command, Validate};
 
 #[derive(Parser, Debug)]
 #[clap(name = "resume", about = env!("CARGO_PKG_DESCRIPTION"))]
 struct ResumeArgs {}
 
-fn resume(
-    _hubris: &HubrisArchive,
-    core: &mut dyn Core,
-    _subargs: &[String],
-) -> Result<()> {
+fn resume(context: &mut humility::ExecutionContext) -> Result<()> {
+    let core = &mut **context.core.as_mut().unwrap();
     let r = core.run();
 
     if r.is_err() {
@@ -45,7 +40,7 @@ pub fn init() -> (Command, ClapCommand<'static>) {
             archive: Archive::Required,
             attach: Attach::LiveOnly,
             validate: Validate::None,
-            run: Run::Subargs(resume),
+            run: resume,
         },
         ResumeArgs::command(),
     )

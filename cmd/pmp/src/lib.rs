@@ -31,10 +31,8 @@ use anyhow::{bail, Result};
 use bit_field::BitField;
 use clap::Command as ClapCommand;
 use clap::{CommandFactory, Parser};
-use humility::core::Core;
-use humility::hubris::*;
 use humility::regs::rv::RVRegister;
-use humility_cmd::{Archive, Attach, Command, Run, Validate};
+use humility_cmd::{Archive, Attach, Command, Validate};
 use riscv::register::{Mode, PmpAddr, PmpCfg};
 use std::iter::zip;
 
@@ -42,11 +40,10 @@ use std::iter::zip;
 #[clap(name = "pmp", about = env!("CARGO_PKG_DESCRIPTION"))]
 struct PmpArgs {}
 
-fn pmpcmd(
-    hubris: &HubrisArchive,
-    core: &mut dyn Core,
-    _subargs: &[String],
-) -> Result<()> {
+fn pmpcmd(context: &mut humility::ExecutionContext) -> Result<()> {
+    let hubris = context.archive.as_ref().unwrap();
+    let core = &mut **context.core.as_mut().unwrap();
+
     match hubris.arch.as_ref().unwrap().get_e_machine() {
         goblin::elf::header::EM_RISCV => (),
         _ => bail!("`humility pmp` only supports riscv"),
@@ -199,7 +196,7 @@ pub fn init() -> (Command, ClapCommand<'static>) {
             archive: Archive::Required,
             attach: Attach::Any,
             validate: Validate::Booted,
-            run: Run::Subargs(pmpcmd),
+            run: pmpcmd,
         },
         PmpArgs::command(),
     )
