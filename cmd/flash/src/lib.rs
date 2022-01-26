@@ -26,8 +26,9 @@
 use anyhow::{bail, Context, Result};
 use clap::Command as ClapCommand;
 use clap::{CommandFactory, Parser};
+use humility::cli::{Cli, Subcommand};
 use humility::hubris::*;
-use humility_cmd::{Archive, Args, Command, RunUnattached};
+use humility_cmd::{Archive, Command};
 use path_slash::PathExt;
 use std::io::Write;
 use std::process::ExitStatus;
@@ -86,7 +87,7 @@ struct FlashConfig {
 
 fn force_openocd(
     hubris: &mut HubrisArchive,
-    args: &Args,
+    args: &Cli,
     subargs: &FlashArgs,
     config: &FlashConfig,
     elf: &[u8],
@@ -222,11 +223,9 @@ fn force_openocd(
     Ok(())
 }
 
-fn flashcmd(
-    hubris: &mut HubrisArchive,
-    args: &Args,
-    subargs: &[String],
-) -> Result<()> {
+fn flashcmd(context: &mut humility::ExecutionContext) -> Result<()> {
+    let Subcommand::Other(subargs) = context.cli.cmd.as_ref().unwrap();
+    let hubris = context.archive.as_mut().unwrap();
     let flash = hubris.load_flash_config()?;
     let subargs = FlashArgs::try_parse_from(subargs)?;
 
@@ -234,7 +233,13 @@ fn flashcmd(
 
     if subargs.force_openocd {
         humility::msg!("forcing flashing using OpenOCD");
-        return force_openocd(hubris, args, &subargs, &config, &flash.elf);
+        return force_openocd(
+            hubris,
+            &context.cli,
+            &subargs,
+            &config,
+            &flash.elf,
+        );
     }
 
     // This is incredibly ugly! It also gives us backwards compatibility!
@@ -302,7 +307,11 @@ fn flashcmd(
                         flashing using OpenOCD"
                     );
                     return force_openocd(
-                        hubris, args, &subargs, &config, &flash.elf,
+                        hubris,
+                        &context.cli,
+                        &subargs,
+                        &config,
+                        &flash.elf,
                     );
                 }
 
@@ -312,7 +321,7 @@ fn flashcmd(
         },
     };
 
-    let probe = match &args.probe {
+    let probe = match &context.cli.probe {
         Some(p) => p,
         None => "auto",
     };
@@ -376,7 +385,7 @@ pub fn init() -> (Command, ClapCommand<'static>) {
         Command::Unattached {
             name: "flash",
             archive: Archive::Required,
-            run: RunUnattached::Args(flashcmd),
+            run: flashcmd,
         },
         FlashArgs::command(),
     )

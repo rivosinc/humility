@@ -1978,6 +1978,3 @@ ID VALIDATION   C P  MUX ADDR DEVICE        DESCRIPTION
 24 validated    4 F  -   0x4a tmp117        Northwest temperature sensor
 25 validated    4 F  -   0x67 bmr491        Intermediate bus converter
 ```
-
-
-
