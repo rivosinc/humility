@@ -168,7 +168,7 @@ impl Core for ProbeCore {
 
         self.halt_and_read(|core| Ok(core.read_8(addr, data)?))
     }
-
+//TODO
     fn read_reg(&mut self, reg: ARMRegister) -> Result<u32> {
         let mut core = self.session.core(0)?;
         use num_traits::ToPrimitive;
@@ -178,6 +178,7 @@ impl Core for ProbeCore {
         ))?)
     }
 
+//TODO
     fn write_reg(&mut self, reg: ARMRegister, value: u32) -> Result<()> {
         let mut core = self.session.core(0)?;
         use num_traits::ToPrimitive;
@@ -230,8 +231,10 @@ impl Core for ProbeCore {
         core.step()?;
         Ok(())
     }
-
+    //TODO
     fn init_swv(&mut self) -> Result<()> {
+        //TODO ensure core is arm
+
         use probe_rs::architecture::arm::swo::SwoConfig;
 
         let config = SwoConfig::new(0).set_baud(2_000_000);
@@ -417,7 +420,9 @@ impl Core for OpenOCDCore {
         ))
     }
 
+    //TODO riscv
     fn read_reg(&mut self, reg: ARMRegister) -> Result<u32> {
+        bail!("Core::read_reg does not support riscv");
         use num_traits::ToPrimitive;
 
         let cmd = format!("reg {}", ARMRegister::to_u16(&reg).unwrap());
@@ -434,7 +439,9 @@ impl Core for OpenOCDCore {
         Err(anyhow!("\"{}\": malformed return value: {:?}", cmd, rval))
     }
 
+    //TODO probably arm specific
     fn init_swv(&mut self) -> Result<()> {
+        bail!("Core::init_swv does not support riscv");
         self.swv = true;
         self.sendcmd("tpiu config disable")?;
 
@@ -447,7 +454,9 @@ impl Core for OpenOCDCore {
         Ok(())
     }
 
+    //TODO
     fn read_swv(&mut self) -> Result<Vec<u8>> {
+        bail!("Core::read_swv does not support riscv");
         if !self.swv {
             self.init_swv()?
         }
@@ -1053,7 +1062,8 @@ pub fn attach(
     // ARMv7-M; if/when "humility flash" uses probe-rs natively to flash the
     // part, this will need to change.
     //
-    let chip = "armv7m";
+    //TODO determine chip from archive
+    let chip = "fe310";
 
     match probe {
         "usb" => {
