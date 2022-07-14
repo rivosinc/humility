@@ -254,6 +254,9 @@ pub struct HubrisArchive {
     // constructed manifest
     pub manifest: HubrisManifest,
 
+    // the archives target 
+    arch: Option<u16>,
+
     // app table
     apptable: Option<(u32, Vec<u8>)>,
 
@@ -354,16 +357,18 @@ impl HubrisArchive {
         // architecture but also that we are disassembling Thumb-2 --
         // and (importantly) to allow M-profile instructions.
         //
+        //TODO
         let cs = Capstone::new()
-            .arm()
-            .mode(arch::arm::ArchMode::Thumb)
-            .extra_mode(std::iter::once(arch::arm::ArchExtraMode::MClass))
+            .riscv()
+            .mode(arch::riscv::ArchMode::RiscV32)
+            .extra_mode(std::iter::once(arch::riscv::ArchExtraMode::RiscVC))
             .detail(true)
             .build();
 
         Ok(Self {
             archive: Vec::new(),
             apptable: None,
+            arch: None,
             imageid: None,
             manifest: Default::default(),
             loaded: BTreeMap::new(),
@@ -1751,15 +1756,22 @@ impl HubrisArchive {
             let target = self.instr_branch_target(instr);
             self.instrs.insert(addr, (b.to_vec(), target));
 
-            const ARM_INSN_SVC: u32 = arch::arm::ArmInsn::ARM_INS_SVC as u32;
-
+            //TODO check arch then use appropriate syscall instruction
+            let syscall_instr: u32 =  match self.arch {
+                Some(goblin::elf::header::EM_ARM) => arch::arm::ArmInsn::ARM_INS_SVC as u32,
+                Some(goblin::elf::header::EM_RISCV) => arch::riscv::RiscVInsn::RISCV_INS_ECALL as u32,
+                None => 0,
+                _ => 0,
+            };
+            // Cant actually let the arch be not arm or riscv 
+            assert!(self.arch.unwrap() != 0);
             //
             // If we encounter a syscall instruction, we need to analyze
             // its containing function to determine the hand-written pushes
             // before any system call in order to be able to successfully
             // unwind the stack.
             //
-            if let InsnId(ARM_INSN_SVC) = instr.id() {
+            if InsnId(syscall_instr) == instr.id() {
                 if task != HubrisTask::Kernel {
                     self.syscall_pushes.insert(
                         addr + b.len() as u32,
@@ -1775,6 +1787,7 @@ impl HubrisArchive {
         // if we are in this case and explicitly fail.
         //
         if last.0 + last.1 as u32 != addr + buffer.len() as u32 {
+            
             bail!(
                 "short disassembly for {}: \
                 stopped at 0x{:x}, expected to go to 0x{:x}",
@@ -1800,10 +1813,11 @@ impl HubrisArchive {
             anyhow!("unrecognized ELF object: {}: {}", object, e)
         })?;
 
-        let arm = elf.header.e_machine == goblin::elf::header::EM_ARM;
+        self.arch = Some(elf.header.e_machine);
 
-        if !arm {
-            bail!("{} not an ARM ELF object", object);
+        //TODO
+        if self.arch != Some(goblin::elf::header::EM_RISCV) {
+            bail!("{} not an RISCV ELF object", object);
         }
 
         let text = elf.section_headers.iter().find(|sh| {
@@ -1889,14 +1903,13 @@ impl HubrisArchive {
             // table, which exists only to indicate a function that contains
             // Thumb instructions (which is of course every function on a
             // microprocessor that executes only Thumb instructions).
-            //
-            assert!(arm);
-
-            let val = if sym.is_function() {
+            // TODO
+            let val = if sym.is_function() && self.arch == Some(goblin::elf::header::EM_ARM) {
                 sym.st_value as u32 & !1
             } else {
                 sym.st_value as u32
             };
+        
 
             let dem = format!("{:#}", demangle(name));
 
@@ -2005,10 +2018,10 @@ impl HubrisArchive {
 
         self.load_object_dwarf(buffer, &elf)
             .context(format!("{}: failed to load DWARF", object))?;
-
+/* TODO
         self.load_object_frames(task, buffer, &elf)
             .context(format!("{}: failed to load debug frames", object))?;
-
+*/
         let iface = self.load_object_idolatry(buffer, &elf)?;
 
         self.modules.insert(
