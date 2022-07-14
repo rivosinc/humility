@@ -84,6 +84,7 @@ fn gdb(
 
     let mut gdb_cmd = None;
 
+    //TODO check arch version
     const GDB_NAMES: [&str; 2] = ["arm-none-eabi-gdb", "gdb-multiarch"];
     for candidate in &GDB_NAMES {
         if Command::new(candidate)
@@ -110,6 +111,7 @@ fn gdb(
             self.0.kill().expect("Could not kill `openocd`")
         }
     }
+    //TODO feel like this should just call to humility openocd
     let _openocd = if subargs.run_openocd {
         hubris
             .extract_file_to(
@@ -155,6 +157,8 @@ fn gdb(
         let image_id = hubris.image_id().unwrap();
         cmd.arg("-q")
             .arg("-x")
+            .arg("script.gdb")
+            .arg("-x")
             .arg("openocd.gdb")
             .arg("-ex")
             .arg(format!(
@@ -165,7 +169,8 @@ fn gdb(
             .arg("-ex")
             .arg("set confirm off")
             .arg("-ex")
-            .arg("quit");
+            .arg("quit")
+            .arg("final.elf");
         cmd.current_dir(work_dir.path());
         let status = cmd.status()?;
         if !status.success() {
