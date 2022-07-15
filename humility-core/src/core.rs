@@ -168,7 +168,7 @@ impl Core for ProbeCore {
 
         self.halt_and_read(|core| Ok(core.read_8(addr, data)?))
     }
-//TODO
+    //TODO
     fn read_reg(&mut self, reg: ARMRegister) -> Result<u32> {
         let mut core = self.session.core(0)?;
         use num_traits::ToPrimitive;
@@ -178,7 +178,7 @@ impl Core for ProbeCore {
         ))?)
     }
 
-//TODO
+    //TODO
     fn write_reg(&mut self, reg: ARMRegister, value: u32) -> Result<()> {
         let mut core = self.session.core(0)?;
         use num_traits::ToPrimitive;
@@ -1062,8 +1062,13 @@ pub fn attach(
     // ARMv7-M; if/when "humility flash" uses probe-rs natively to flash the
     // part, this will need to change.
     //
-    //TODO determine chip from archive
-    let chip = "fe310";
+    //TODO perhaps better alt to fe310, generic riscv?
+    let chip = match hubris.arch {
+        Some(goblin::elf::header::EM_ARM) => Some("armv7m"),
+        Some(goblin::elf::header::EM_RISCV) => Some("fe310"),
+        _ => None,
+    }
+    .unwrap();
 
     match probe {
         "usb" => {

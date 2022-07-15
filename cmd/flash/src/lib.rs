@@ -130,19 +130,19 @@ fn flashcmd(
             let srec = tempfile::NamedTempFile::new()?;
 
             if let FlashProgramConfig::Payload(ref payload) = payload {
-            
                 if let Some(serial) = serial {
                     humility::msg!("specifying serial {}", serial);
-                    
+
                     //jlink adapter does not support hla
                     if payload.contains("jlink") {
                         //TODO find alternitive to support specifying serial, seems veeeery version
                         //specific
-                        humility::msg!("using jlink adapter, cannot specify serial");
+                        humility::msg!(
+                            "using jlink adapter, cannot specify serial"
+                        );
                         ();
                         //writeln!(conf, "jlink serial {}", serial)?;
-                    }
-                    else {
+                    } else {
                         //
                         // In OpenOCD 0.11 dev, hla_serial has been deprecated, and
                         // using it results in this warning:
@@ -162,8 +162,7 @@ fn flashcmd(
                 }
 
                 write!(conf, "{}", payload)?;
-            }
-            else {
+            } else {
                 bail!("unexpected OpenOCD payload: {:?}", payload);
             }
 

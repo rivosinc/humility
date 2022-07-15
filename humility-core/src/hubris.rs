@@ -254,8 +254,11 @@ pub struct HubrisArchive {
     // constructed manifest
     pub manifest: HubrisManifest,
 
-    // the archives target 
-    arch: Option<u16>,
+    // the archives target architecture
+    pub arch: Option<u16>,
+
+    // 32bit v 64bit
+    bus_size: Option<u8>,
 
     // app table
     apptable: Option<(u32, Vec<u8>)>,
@@ -270,7 +273,7 @@ pub struct HubrisArchive {
     current: u32,
 
     // Capstone library handle
-    cs: capstone::Capstone,
+    cs: Option<capstone::Capstone>,
 
     // Instructions: address to bytes/target tuple. The target will be None if
     // the instruction did not decode as some kind of jump/branch/call.
@@ -352,35 +355,15 @@ pub struct HubrisArchive {
 #[rustfmt::skip::macros(anyhow, bail)]
 impl HubrisArchive {
     pub fn new() -> Result<HubrisArchive> {
-        //
-        // Initialize Capstone, being sure to specify not only our
-        // architecture but also that we are disassembling Thumb-2 --
-        // and (importantly) to allow M-profile instructions.
-        //
-        //TODO
-        let cs = Capstone::new()
-            .riscv()
-            .mode(arch::riscv::ArchMode::RiscV32)
-            .extra_mode(std::iter::once(arch::riscv::ArchExtraMode::RiscVC))
-            .detail(true)
-            .build();
-
         Ok(Self {
             archive: Vec::new(),
             apptable: None,
             arch: None,
+            bus_size: None,
             imageid: None,
             manifest: Default::default(),
             loaded: BTreeMap::new(),
-            cs: match cs {
-                Ok(mut cs) => {
-                    cs.set_skipdata(true).expect("failed to set skipdata");
-                    cs
-                }
-                Err(err) => {
-                    bail!("failed to initialize disassembler: {}", err);
-                }
-            },
+            cs: None,
             current: 0,
             instrs: HashMap::new(),
             syscall_pushes: HashMap::new(),
@@ -500,7 +483,7 @@ impl HubrisArchive {
         &self,
         instr: &capstone::Insn,
     ) -> Option<HubrisTarget> {
-        let detail = self.cs.insn_detail(instr).ok()?;
+        let detail = self.cs.as_ref().unwrap().insn_detail(instr).ok()?;
 
         let mut jump = false;
         let mut call = false;
@@ -1725,15 +1708,16 @@ impl HubrisArchive {
         addr: u32,
         buffer: &[u8],
     ) -> Result<()> {
-        let instrs = match self.cs.disasm_all(buffer, addr.into()) {
-            Ok(instrs) => instrs,
-            Err(err) => {
-                bail!(
+        let instrs =
+            match self.cs.as_ref().unwrap().disasm_all(buffer, addr.into()) {
+                Ok(instrs) => instrs,
+                Err(err) => {
+                    bail!(
                     "failed to disassemble {} (addr 0x{:08x}, {}): {}",
                     func, addr, buffer.len(), err
                 );
-            }
-        };
+                }
+            };
 
         let mut last: (u32, usize) = (0, 0);
 
@@ -1757,14 +1741,19 @@ impl HubrisArchive {
             self.instrs.insert(addr, (b.to_vec(), target));
 
             //TODO check arch then use appropriate syscall instruction
-            let syscall_instr: u32 =  match self.arch {
-                Some(goblin::elf::header::EM_ARM) => arch::arm::ArmInsn::ARM_INS_SVC as u32,
-                Some(goblin::elf::header::EM_RISCV) => arch::riscv::RiscVInsn::RISCV_INS_ECALL as u32,
-                None => 0,
-                _ => 0,
+            let syscall_instr = match self.arch {
+                Some(goblin::elf::header::EM_ARM) => {
+                    Some(arch::arm::ArmInsn::ARM_INS_SVC as u32)
+                }
+                Some(goblin::elf::header::EM_RISCV) => {
+                    Some(arch::riscv::RiscVInsn::RISCV_INS_ECALL as u32)
+                }
+                _ => None,
             };
-            // Cant actually let the arch be not arm or riscv 
-            assert!(self.arch.unwrap() != 0);
+            if let None = syscall_instr {
+                bail!("Using unsupported arch: {}", self.arch.unwrap());
+            }
+            let syscall_instr: u32 = syscall_instr.unwrap();
             //
             // If we encounter a syscall instruction, we need to analyze
             // its containing function to determine the hand-written pushes
@@ -1775,7 +1764,10 @@ impl HubrisArchive {
                 if task != HubrisTask::Kernel {
                     self.syscall_pushes.insert(
                         addr + b.len() as u32,
-                        Some(presyscall_pushes(&self.cs, &instrs[0..ndx])?),
+                        Some(presyscall_pushes(
+                            &self.cs.as_ref().unwrap(),
+                            &instrs[0..ndx],
+                        )?),
                     );
                 }
             }
@@ -1787,7 +1779,6 @@ impl HubrisArchive {
         // if we are in this case and explicitly fail.
         //
         if last.0 + last.1 as u32 != addr + buffer.len() as u32 {
-            
             bail!(
                 "short disassembly for {}: \
                 stopped at 0x{:x}, expected to go to 0x{:x}",
@@ -1813,12 +1804,75 @@ impl HubrisArchive {
             anyhow!("unrecognized ELF object: {}: {}", object, e)
         })?;
 
+        // Load target architecture from elf, will be used for dissassembly
         self.arch = Some(elf.header.e_machine);
 
-        //TODO
-        if self.arch != Some(goblin::elf::header::EM_RISCV) {
-            bail!("{} not an RISCV ELF object", object);
+        // Determine 32bit vs 64bit
+        self.bus_size = match elf.header.e_ident[goblin::elf::header::EI_CLASS]
+        {
+            goblin::elf::header::ELFCLASSNONE => None,
+            _ => Some(elf.header.e_ident[goblin::elf::header::EI_CLASS]),
+        };
+
+        if let None = self.arch {
+            bail!("Invalid architecture in elf header");
         }
+        if self.bus_size == Some(goblin::elf::header::ELFCLASS64) {
+            bail!("64bit images are not fully supported");
+        }
+
+        //Instantiate an appropriate capstone for the architecture
+        let cs = match (self.arch, self.bus_size) {
+            (Some(goblin::elf::header::EM_ARM), _) => Some(
+                Capstone::new()
+                    .arm()
+                    .mode(arch::arm::ArchMode::Thumb)
+                    .extra_mode(std::iter::once(
+                        arch::arm::ArchExtraMode::MClass,
+                    ))
+                    .detail(true)
+                    .build()
+                    .unwrap(),
+            ),
+
+            (
+                Some(goblin::elf::header::EM_RISCV),
+                Some(goblin::elf::header::ELFCLASS32),
+            ) => Some(
+                Capstone::new()
+                    .riscv()
+                    .mode(arch::riscv::ArchMode::RiscV32)
+                    .extra_mode(std::iter::once(
+                        arch::riscv::ArchExtraMode::RiscVC,
+                    ))
+                    .detail(true)
+                    .build()
+                    .unwrap(),
+            ),
+
+            (
+                Some(goblin::elf::header::EM_RISCV),
+                Some(goblin::elf::header::ELFCLASS64),
+            ) => Some(
+                Capstone::new()
+                    .riscv()
+                    .mode(arch::riscv::ArchMode::RiscV64)
+                    .extra_mode(std::iter::once(
+                        arch::riscv::ArchExtraMode::RiscVC,
+                    ))
+                    .detail(true)
+                    .build()
+                    .unwrap(),
+            ),
+
+            _ => None,
+        };
+        if let None = cs {
+            bail!("Failed to create capstone disassembler. Most likely used an elf format not supported by humility");
+        }
+        let mut cs: Capstone = cs.unwrap();
+        cs.set_skipdata(false).expect("failed to set skipdata");
+        self.cs = Some(cs);
 
         let text = elf.section_headers.iter().find(|sh| {
             if let Some(Ok(name)) = elf.shdr_strtab.get(sh.sh_name) {
@@ -1904,12 +1958,13 @@ impl HubrisArchive {
             // Thumb instructions (which is of course every function on a
             // microprocessor that executes only Thumb instructions).
             // TODO
-            let val = if sym.is_function() && self.arch == Some(goblin::elf::header::EM_ARM) {
+            let val = if sym.is_function()
+                && self.arch == Some(goblin::elf::header::EM_ARM)
+            {
                 sym.st_value as u32 & !1
             } else {
                 sym.st_value as u32
             };
-        
 
             let dem = format!("{:#}", demangle(name));
 
@@ -2018,10 +2073,10 @@ impl HubrisArchive {
 
         self.load_object_dwarf(buffer, &elf)
             .context(format!("{}: failed to load DWARF", object))?;
-/* TODO
-        self.load_object_frames(task, buffer, &elf)
-            .context(format!("{}: failed to load debug frames", object))?;
-*/
+        /* TODO
+                self.load_object_frames(task, buffer, &elf)
+                    .context(format!("{}: failed to load debug frames", object))?;
+        */
         let iface = self.load_object_idolatry(buffer, &elf)?;
 
         self.modules.insert(
