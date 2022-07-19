@@ -403,6 +403,10 @@ impl HubrisArchive {
     /// TODO: this also returns `None` if `addr` is not an instruction boundary,
     /// which is probably wrong but we haven't totally thought it through yet.
     pub fn instr_target(&self, addr: u32) -> Option<HubrisTarget> {
+        // Target is only used for ETM so no plan to port branch targets to riscv
+        if let Some(goblin::elf::header::EM_RISCV) = self.arch {
+            unimplemented!();
+        }
         self.instrs.get(&addr).and_then(|&(_, target)| target)
     }
 
@@ -483,6 +487,12 @@ impl HubrisArchive {
         &self,
         instr: &capstone::Insn,
     ) -> Option<HubrisTarget> {
+        // Currently only valid for arm, and the results are only used for ETM
+        // No plan to port this for riscv
+        if let Some(goblin::elf::header::EM_RISCV) = self.arch {
+            return None;
+        }
+
         let detail = self.cs.as_ref().unwrap().insn_detail(instr).ok()?;
 
         let mut jump = false;
