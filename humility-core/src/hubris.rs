@@ -1780,9 +1780,9 @@ impl HubrisArchive {
         //
         if last.0 + last.1 as u32 != addr + buffer.len() as u32 {
             bail!(
-                "short disassembly for {}: \
+                "short disassembly for {} in {}: \
                 stopped at 0x{:x}, expected to go to 0x{:x}",
-                object, last.0, addr + buffer.len() as u32
+                func, object, last.0, addr + buffer.len() as u32
             );
         }
 
@@ -1871,7 +1871,8 @@ impl HubrisArchive {
             bail!("Failed to create capstone disassembler. Most likely used an elf format not supported by humility");
         }
         let mut cs: Capstone = cs.unwrap();
-        cs.set_skipdata(false).expect("failed to set skipdata");
+
+        cs.set_skipdata(true).expect("failed to set skipdata");
         self.cs = Some(cs);
 
         let text = elf.section_headers.iter().find(|sh| {
@@ -2589,9 +2590,6 @@ impl HubrisArchive {
         dumpfile: &str,
         doneness: HubrisArchiveDoneness,
     ) -> Result<()> {
-        if self.arch != Some(goblin::elf::header::EM_ARM) {
-            todo!();
-        }
         //
         // We expect the dump to be an ELF core dump.
         //
@@ -2599,6 +2597,12 @@ impl HubrisArchive {
         let elf = Elf::parse(&contents).map_err(|e| {
             anyhow!("failed to parse {} as an ELF file: {}", dumpfile, e)
         })?;
+   
+        self.arch = Some(elf.header.e_machine);
+
+        if self.arch != Some(goblin::elf::header::EM_ARM) {
+            todo!();
+        }
 
         if let Some(notes) = elf.iter_note_headers(&contents) {
             for note in notes {
