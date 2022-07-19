@@ -1740,7 +1740,7 @@ impl HubrisArchive {
             let target = self.instr_branch_target(instr);
             self.instrs.insert(addr, (b.to_vec(), target));
 
-            //TODO check arch then use appropriate syscall instruction
+            // Use appropriate syscall for the platform
             let syscall_instr = match self.arch {
                 Some(goblin::elf::header::EM_ARM) => {
                     Some(arch::arm::ArmInsn::ARM_INS_SVC as u32)
@@ -2550,6 +2550,9 @@ impl HubrisArchive {
     }
 
     fn load_registers(&mut self, r: &[u8]) -> Result<()> {
+        if self.arch != Some(goblin::elf::header::EM_ARM) {
+            todo!();
+        }
         if r.len() % 8 != 0 {
             bail!("bad length {} in registers note", r.len());
         }
@@ -2586,6 +2589,9 @@ impl HubrisArchive {
         dumpfile: &str,
         doneness: HubrisArchiveDoneness,
     ) -> Result<()> {
+        if self.arch != Some(goblin::elf::header::EM_ARM) {
+            todo!();
+        }
         //
         // We expect the dump to be an ELF core dump.
         //
@@ -3172,6 +3178,9 @@ impl HubrisArchive {
     }
 
     pub fn dump_registers(&self) -> HashMap<ARMRegister, u32> {
+        if self.arch != Some(goblin::elf::header::EM_ARM) {
+            todo!();
+        }
         self.registers.clone()
     }
 
@@ -3180,6 +3189,9 @@ impl HubrisArchive {
         core: &mut dyn crate::core::Core,
         t: HubrisTask,
     ) -> Result<BTreeMap<ARMRegister, u32>> {
+        if self.arch != Some(goblin::elf::header::EM_ARM) {
+            todo!();
+        }
         let (base, _) = self.task_table(core)?;
         let cur =
             core.read_word_32(self.lookup_symword("CURRENT_TASK_PTR")?)?;
@@ -3316,6 +3328,9 @@ impl HubrisArchive {
         limit: u32,
         regs: &BTreeMap<ARMRegister, u32>,
     ) -> Result<Vec<HubrisStackFrame>> {
+        if self.arch != Some(goblin::elf::header::EM_ARM) {
+            todo!();
+        }
         let regions = self.regions(core)?;
         let sp = regs
             .get(&ARMRegister::SP)
@@ -3603,6 +3618,9 @@ impl HubrisArchive {
         core: &mut dyn crate::core::Core,
         dumpfile: Option<&str>,
     ) -> Result<()> {
+        if self.arch != Some(goblin::elf::header::EM_ARM) {
+            todo!();
+        }
         use indicatif::{HumanBytes, HumanDuration};
         use indicatif::{ProgressBar, ProgressStyle};
         use std::io::Write;

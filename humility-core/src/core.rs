@@ -422,7 +422,6 @@ impl Core for OpenOCDCore {
 
     //TODO riscv
     fn read_reg(&mut self, reg: ARMRegister) -> Result<u32> {
-        bail!("Core::read_reg does not support riscv");
         use num_traits::ToPrimitive;
 
         let cmd = format!("reg {}", ARMRegister::to_u16(&reg).unwrap());
@@ -441,7 +440,6 @@ impl Core for OpenOCDCore {
 
     //TODO probably arm specific
     fn init_swv(&mut self) -> Result<()> {
-        bail!("Core::init_swv does not support riscv");
         self.swv = true;
         self.sendcmd("tpiu config disable")?;
 
@@ -456,7 +454,6 @@ impl Core for OpenOCDCore {
 
     //TODO
     fn read_swv(&mut self) -> Result<Vec<u8>> {
-        bail!("Core::read_swv does not support riscv");
         if !self.swv {
             self.init_swv()?
         }
