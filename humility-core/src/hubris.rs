@@ -1639,6 +1639,9 @@ impl HubrisArchive {
         buffer: &[u8],
         elf: &goblin::elf::Elf,
     ) -> Result<()> {
+        if let Some(goblin::elf::header::EM_RISCV) = self.arch {
+            return Ok(());
+        }
         let id = gimli::SectionId::DebugFrame.name();
 
         let sh = elf
@@ -2075,10 +2078,10 @@ impl HubrisArchive {
 
         self.load_object_dwarf(buffer, &elf)
             .context(format!("{}: failed to load DWARF", object))?;
-        /* TODO
-                self.load_object_frames(task, buffer, &elf)
-                    .context(format!("{}: failed to load debug frames", object))?;
-        */
+        
+        self.load_object_frames(task, buffer, &elf)
+            .context(format!("{}: failed to load debug frames", object))?;
+
         let iface = self.load_object_idolatry(buffer, &elf)?;
 
         self.modules.insert(
