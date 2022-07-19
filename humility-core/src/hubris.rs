@@ -1916,6 +1916,7 @@ impl HubrisArchive {
                     bail!("bad symbol in {}: {}", object, sym.st_name);
                 }
             };
+            let name = name.split(".").next().unwrap();
 
             //
             // We track from the start of our BSS to the end of our heap
