@@ -963,6 +963,8 @@ impl HubrisArchive {
 
         if let (Some(name), Some(underlying)) = (name, underlying) {
             self.ptrtypes.insert(goff, (name.to_string(), underlying));
+        } else if let (None, Some(underlying)) = (name, underlying) {
+            self.ptrtypes.insert(goff, (goff.to_string(), underlying));
         }
 
         Ok(())
@@ -2088,7 +2090,7 @@ impl HubrisArchive {
 
         self.load_object_dwarf(buffer, &elf)
             .context(format!("{}: failed to load DWARF", object))?;
-        
+
         self.load_object_frames(task, buffer, &elf)
             .context(format!("{}: failed to load debug frames", object))?;
 
@@ -2610,7 +2612,7 @@ impl HubrisArchive {
         let elf = Elf::parse(&contents).map_err(|e| {
             anyhow!("failed to parse {} as an ELF file: {}", dumpfile, e)
         })?;
-   
+
         self.arch = Some(elf.header.e_machine);
 
         if self.arch != Some(goblin::elf::header::EM_ARM) {
