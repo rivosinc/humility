@@ -4260,7 +4260,7 @@ impl HubrisArchive {
 
     pub fn unhalted_reads(&self) -> bool {
         if let Some(ref target) = self.manifest.target {
-            target != "thumbv6m-none-eabi"
+            false //target != "thumbv6m-none-eabi" 
         } else {
             false
         }
