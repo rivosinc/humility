@@ -187,7 +187,19 @@ fn tasks(
     let task_t = hubris.lookup_struct_byname("Task")?;
     let save = task_t.lookup_member("save")?.offset;
     let state = hubris.lookup_struct_byname("SavedState")?;
-    let r4 = save + state.lookup_member("r4")?.offset;
+
+    // Find offset for first syscall argument in SaveState,
+    // Calling convention depends on architecture, see https://oxidecomputer.github.io/hubris/reference/#_syscall_abi
+    let syscall_arg = match hubris.arch {
+        Some(goblin::elf::header::EM_RISCV) => {
+            Ok(save + state.lookup_member("a0")?.offset)
+        }
+        Some(goblin::elf::header::EM_ARM) => {
+            Ok(save + state.lookup_member("r4")?.offset)
+        }
+        _ => Err("Unsupported architecture"),
+    }
+    .unwrap();
 
     let mut found = false;
 
@@ -226,11 +238,15 @@ fn tasks(
             // Always load R4, R5 and R6, which are in the saved state in our
             // task structure (and are needed to print state).
             //
-            for r in 4..=6 {
-                let o = offs + r4 + (r - 4) * 4;
-                let v =
-                    u32::from_le_bytes(taskblock[o..o + 4].try_into().unwrap());
-                regs.insert((i, ARMRegister::from_usize(r).unwrap()), v);
+            //TODO only read registers from arm for now
+            if let Some(goblin::elf::header::EM_ARM) = hubris.arch {
+                for r in 4..=6 {
+                    let o = offs + syscall_arg + (r - 4) * 4;
+                    let v = u32::from_le_bytes(
+                        taskblock[o..o + 4].try_into().unwrap(),
+                    );
+                    regs.insert((i, ARMRegister::from_usize(r).unwrap()), v);
+                }
             }
 
             tasks.push((addr, task_value, task));
