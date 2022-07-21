@@ -443,7 +443,7 @@ fn explain_sched_state(
             print_task_id(hubris, tid);
         }
         SchedState::InRecv(tid) => {
-            let notmask = *regs.get(&(task_index, ARMRegister::R6)).unwrap();
+            let notmask = 0; //TODO riscv register*regs.get(&(task_index, ARMRegister::R6)).unwrap();
             explain_recv(hubris, tid, notmask, irqs, timer);
         }
     }
