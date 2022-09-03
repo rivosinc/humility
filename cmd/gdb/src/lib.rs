@@ -48,7 +48,7 @@ struct GdbArgs {
     serial: Option<String>,
 }
 
-fn gdb(
+pub fn gdb(
     hubris: &mut HubrisArchive,
     args: &Args,
     subargs: &[String],
