@@ -280,6 +280,16 @@ impl humility::reflect::Load for TaskId {
 
 /// Double of the struct from `ringbuf`.
 ///
+/// The Hubris equivalent has a type parameter. We're dynamic instead; see
+/// `RingbufEntry`.
+#[derive(Clone, Debug, Load)]
+pub struct Stringbuf {
+    pub last: Option<u32>,
+    pub buffer: Vec<u8>,
+}
+
+/// Double of the struct from `ringbuf`.
+///
 /// The Hubris equivalent has a type parameter. We're dynamic instead: the
 /// `payload` is just read in as a generic `Value`.
 #[derive(Clone, Debug, Load)]

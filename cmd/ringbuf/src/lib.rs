@@ -82,9 +82,9 @@ fn ringbuf_dump(
     let mut buf: Vec<u8> = vec![];
     buf.resize_with(ringbuf_var.size, Default::default);
 
-    let _info = core.halt()?;
+    let _info = core.op_start()?;
     core.read_8(ringbuf_var.addr, buf.as_mut_slice())?;
-    core.run()?;
+    core.op_done()?;
 
     // There are two possible shapes of ringbufs, depending on the age of the
     // firmware.
@@ -154,12 +154,13 @@ fn ringbuf(
         if let Some(ref name) = subargs.name {
             if v.0.eq(name)
                 || (v.0.ends_with("RINGBUF")
+                    && (!v.0.ends_with("STRINGBUF"))
                     && (v.0.contains(name)
                         || taskname(hubris, v.1)?.contains(name)))
             {
                 ringbufs.push(v);
             }
-        } else if v.0.ends_with("RINGBUF") {
+        } else if v.0.ends_with("RINGBUF") && !v.0.ends_with("STRINGBUF") {
             ringbufs.push(v);
         }
     }
