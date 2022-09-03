@@ -1,0 +1,13 @@
+[package]
+name = "humility-cmd-halt"
+version = "0.1.0"
+edition = "2021"
+description = "Halt the chip using debug module"
+
+[dependencies]
+humility = { path = "../../humility-core", package = "humility-core" }
+humility-cmd = { path = "../../humility-cmd" }
+clap = { version = "3.0.12", features = ["derive", "env"] }
+anyhow = { version = "1.0.44", features = ["backtrace"] }
+num-traits = "0.2"
+log = "0.4"

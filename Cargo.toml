@@ -39,6 +39,7 @@ members = [
     "cmd/flash",
     "cmd/gdb",
     "cmd/gpio",
+    "cmd/halt",
     "cmd/hash",
     "cmd/hiffy",
     "cmd/rpc",
@@ -106,6 +107,7 @@ cmd-extract = { path = "./cmd/extract", package = "humility-cmd-extract" }
 cmd-flash = { path = "./cmd/flash", package = "humility-cmd-flash" }
 cmd-gdb = { path = "./cmd/gdb", package = "humility-cmd-gdb" }
 cmd-gpio = { path = "./cmd/gpio", package = "humility-cmd-gpio" }
+cmd-halt = { path = "./cmd/halt", package = "humility-cmd-halt" }
 cmd-hash = { path = "./cmd/hash", package = "humility-cmd-hash" }
 cmd-hiffy = { path = "./cmd/hiffy", package = "humility-cmd-hiffy" }
 cmd-i2c = { path = "./cmd/i2c", package = "humility-cmd-i2c" }
