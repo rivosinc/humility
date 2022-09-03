@@ -424,7 +424,7 @@ dependencies = [
  "bare-metal 1.0.0",
  "cfg-if",
  "cortex-m",
- "riscv",
+ "riscv 0.7.0",
 ]
 
 [[package]]
@@ -878,12 +878,14 @@ dependencies = [
  "humility-cmd-flash",
  "humility-cmd-gdb",
  "humility-cmd-gpio",
+ "humility-cmd-halt",
  "humility-cmd-hash",
  "humility-cmd-hiffy",
  "humility-cmd-i2c",
  "humility-cmd-isp",
  "humility-cmd-itm",
  "humility-cmd-jefe",
+ "humility-cmd-log",
  "humility-cmd-lpc55gpio",
  "humility-cmd-manifest",
  "humility-cmd-map",
@@ -891,7 +893,9 @@ dependencies = [
  "humility-cmd-net",
  "humility-cmd-openocd",
  "humility-cmd-pmbus",
+ "humility-cmd-pmp",
  "humility-cmd-probe",
+ "humility-cmd-qemu",
  "humility-cmd-qspi",
  "humility-cmd-readmem",
  "humility-cmd-readvar",
@@ -899,6 +903,7 @@ dependencies = [
  "humility-cmd-rencm",
  "humility-cmd-rendmp",
  "humility-cmd-reset",
+ "humility-cmd-resume",
  "humility-cmd-ringbuf",
  "humility-cmd-rpc",
  "humility-cmd-sensors",
@@ -991,7 +996,7 @@ dependencies = [
  "num-traits",
  "parse_int",
  "probe-rs",
- "strum",
+ "strum 0.22.0",
  "strum_macros",
  "zerocopy",
 ]
@@ -1117,6 +1122,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "humility-cmd-halt"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "humility-cmd",
+ "humility-core",
+ "log",
+ "num-traits",
+]
+
+[[package]]
 name = "humility-cmd-hash"
 version = "0.1.0"
 dependencies = [
@@ -1176,7 +1193,7 @@ dependencies = [
  "num-traits",
  "parse_int",
  "serialport",
- "strum",
+ "strum 0.22.0",
  "strum_macros",
  "zerocopy",
 ]
@@ -1205,6 +1222,17 @@ dependencies = [
  "humility-core",
  "log",
  "parse_int",
+]
+
+[[package]]
+name = "humility-cmd-log"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "humility-cmd",
+ "humility-core",
+ "log",
 ]
 
 [[package]]
@@ -1328,6 +1356,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "humility-cmd-qemu"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "ctrlc",
+ "goblin",
+ "humility-cmd",
+ "humility-cmd-gdb",
+ "humility-core",
+ "tempfile",
+]
+
+[[package]]
 name = "humility-cmd-qspi"
 version = "0.1.0"
 dependencies = [
@@ -1369,10 +1411,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "goblin",
  "humility-cmd",
  "humility-core",
  "humility-cortex",
+ "log",
  "num-traits",
+ "strum 0.24.1",
 ]
 
 [[package]]
@@ -1413,6 +1458,18 @@ dependencies = [
 
 [[package]]
 name = "humility-cmd-reset"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "humility-cmd",
+ "humility-core",
+ "log",
+ "num-traits",
+]
+
+[[package]]
+name = "humility-cmd-resume"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1538,6 +1595,7 @@ dependencies = [
  "anyhow",
  "clap",
  "colored",
+ "goblin",
  "humility-cmd",
  "humility-core",
  "log",
@@ -1788,7 +1846,7 @@ dependencies = [
 [[package]]
 name = "libusb1-sys"
 version = "0.5.0"
-source = "git+https://github.com/oxidecomputer/rusb?branch=probe-rs-0.12-libusb-v1.0.26#b97a32d2b36c3db5c67f58aca015039536416439"
+source = "git+https://github.com/rivosinc/rusb?branch=dev/drew/static_lib_fix#7932c4154ff21daf618a4127b847aaa8a35ddc2a"
 dependencies = [
  "cc",
  "libc",
@@ -2323,6 +2381,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "riscv"
+version = "0.8.0"
+source = "git+https://github.com/rivosinc/riscv?branch=rivos/dev#10d7b8572d186b887aaa71ef96ce1b26453ac74b"
+dependencies = [
+ "bare-metal 1.0.0",
+ "bit_field",
+ "embedded-hal",
+ "volatile-register",
+]
+
+[[package]]
 name = "riscv-target"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2716,6 +2785,12 @@ name = "strum"
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7ac893c7d471c8a21f31cfe213ec4f6d9afeed25537c772e08ef3f005f8729e"
+
+[[package]]
+name = "strum"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "063e6045c0e62079840579a7e47a355ae92f60eb74daaf156fb1e84ba164e63f"
 
 [[package]]
 name = "strum_macros"
