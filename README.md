@@ -85,6 +85,9 @@ which can have the following values:
   microcontroller.  If there is no probe found, this will default
   to `archive`.
 
+- `qemu`: Attach via Qemu's GDB server, which is presumed to have the interface 
+  available on localhost:3333.  Currently, reading registers does NOT work.
+
 - `usb`: Attach directly via USB to a debug probe.  When multiple probes
   are plugged in via USB, a probe index must be specified as a suffix
   (e.g., `usb-0`, `usb-1`, etc.)  To determine which probe is which,
@@ -268,6 +271,7 @@ a specified target.  (In the above example, one could execute `humility
 - [humility power](#humility-power): show power-related information
 - [humility powershelf](#humility-powershelf): inspect powershelf over the management network
 - [humility probe](#humility-probe): probe for any attached devices
+- [humility qemu](#humility-qemu): Launch a qemu instance running the corresponding archive
 - [humility qspi](#humility-qspi): QSPI status, reading and writing
 - [humility readmem](#humility-readmem): read and display memory region
 - [humility readvar](#humility-readvar): read and display a specified Hubris variable
@@ -2098,6 +2102,21 @@ humility:          MSP => 0x20000f48
 humility:          PSP => 0x20001ba8
 humility:          SPR => 0x7000000
 ```
+
+
+### `humility qemu`
+
+This command launches qemu with a gdb server
+
+The `--port` option can be used to specify the gdb port
+
+The `--wait` option instructs qemu to wait for a gdb client to connect
+
+The `--gdb` option can be used to launch qemu and then open a gdb console connected to it
+
+This works by parsing the qemu.sh file within the chip folder
+(`<hubris>/chips/<chipname>/qemu.sh`), then adding additional args to configure gdb
+
 
 
 ### `humility qspi`

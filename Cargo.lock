@@ -1253,6 +1253,7 @@ dependencies = [
  "humility-cmd-power",
  "humility-cmd-powershelf",
  "humility-cmd-probe",
+ "humility-cmd-qemu",
  "humility-cmd-qspi",
  "humility-cmd-readmem",
  "humility-cmd-readvar",
@@ -1903,6 +1904,21 @@ dependencies = [
  "humility-core",
  "humility-platform",
  "num-traits",
+]
+
+[[package]]
+name = "humility-cmd-qemu"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "ctrlc",
+ "goblin",
+ "humility-cli",
+ "humility-cmd",
+ "humility-cmd-gdb",
+ "humility-core",
+ "tempfile",
 ]
 
 [[package]]

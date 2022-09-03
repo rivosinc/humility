@@ -49,7 +49,7 @@ struct GdbArgs {
     serial: Option<String>,
 }
 
-fn gdb(context: &mut ExecutionContext) -> Result<()> {
+pub fn gdb(context: &mut ExecutionContext) -> Result<()> {
     let Subcommand::Other(subargs) = context.cli.cmd.as_ref().unwrap();
     let hubris = context.archive.as_ref().unwrap();
 

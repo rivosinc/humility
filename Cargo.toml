@@ -78,6 +78,7 @@ members = [
     "cmd/pmbus",
     "cmd/power",
     "cmd/probe",
+    "cmd/qemu",
     "cmd/qspi",
     "cmd/readmem",
     "cmd/readvar",
@@ -186,6 +187,7 @@ cmd-pmbus = { path = "./cmd/pmbus", package = "humility-cmd-pmbus" }
 cmd-power = { path = "./cmd/power", package = "humility-cmd-power" }
 cmd-powershelf = { path = "./cmd/powershelf", package = "humility-cmd-powershelf" }
 cmd-probe = { path = "./cmd/probe", package = "humility-cmd-probe" }
+cmd-qemu = { path = "./cmd/qemu", package = "humility-cmd-qemu" }
 cmd-qspi = { path = "./cmd/qspi", package = "humility-cmd-qspi" }
 cmd-readmem = { path = "./cmd/readmem", package = "humility-cmd-readmem" }
 cmd-readvar = { path = "./cmd/readvar", package = "humility-cmd-readvar" }
@@ -336,6 +338,7 @@ cmd-pmbus = { workspace = true }
 cmd-power = { workspace = true }
 cmd-powershelf = { workspace = true }
 cmd-probe = { workspace = true }
+cmd-qemu = { workspace = true }
 cmd-qspi = { workspace = true }
 cmd-readmem = { workspace = true }
 cmd-readvar = { workspace = true }
