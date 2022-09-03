@@ -213,7 +213,7 @@ fn tasks(
     };
 
     loop {
-        core.halt()?;
+        core.op_start()?;
 
         let cur =
             core.read_word_32(hubris.lookup_symword("CURRENT_TASK_PTR")?)?;
@@ -275,7 +275,7 @@ fn tasks(
         let keep_halted = subargs.stack || subargs.registers || panicked;
 
         if !keep_halted {
-            core.run()?;
+            core.op_done()?;
         }
 
         println!("system time = {}", ticks);
@@ -377,7 +377,7 @@ fn tasks(
         }
 
         if keep_halted {
-            core.run()?;
+            core.op_done()?;
         }
 
         if subargs.task.is_some() && !found {
