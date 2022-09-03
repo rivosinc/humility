@@ -277,6 +277,7 @@ a specified target.  (In the above example, one could execute `humility
 - [humility rendmp](#humility-rendmp): Renesas digital muliphase controller operations
 - [humility repl](#humility-repl): read, eval, print, loop
 - [humility reset](#humility-reset): Reset the chip using external pins
+- [humility resume](#humility-resume): Resume the chip using debug module
 - [humility ringbuf](#humility-ringbuf): read and display a specified ring buffer
 - [humility rpc](#humility-rpc): execute Idol calls over a network
 - [humility sbrmi](#humility-sbrmi): Sideband Remote Management Interface (SB-RMI) commands
@@ -2673,6 +2674,12 @@ future.
 
 `humility reset` will hard reset the system using the debug pin
 or using software reset with the appropriate flag
+
+
+### `humility resume`
+
+`humility resume` will resume the core using the debug interface
+
 
 
 ### `humility ringbuf`

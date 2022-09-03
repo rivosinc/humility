@@ -1261,6 +1261,7 @@ dependencies = [
  "humility-cmd-rencm",
  "humility-cmd-rendmp",
  "humility-cmd-reset",
+ "humility-cmd-resume",
  "humility-cmd-ringbuf",
  "humility-cmd-rpc",
  "humility-cmd-sbrmi",
@@ -2039,6 +2040,19 @@ dependencies = [
  "humility-cli",
  "humility-cmd",
  "humility-core",
+]
+
+[[package]]
+name = "humility-cmd-resume"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "humility-cli",
+ "humility-cmd",
+ "humility-core",
+ "log",
+ "num-traits",
 ]
 
 [[package]]

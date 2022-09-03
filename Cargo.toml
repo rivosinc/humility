@@ -84,6 +84,7 @@ members = [
     "cmd/rebootleby",
     "cmd/registers",
     "cmd/reset",
+    "cmd/resume",
     "cmd/rencm",
     "cmd/rendmp",
     "cmd/repl",
@@ -191,6 +192,7 @@ cmd-readvar = { path = "./cmd/readvar", package = "humility-cmd-readvar" }
 cmd-rebootleby = { path = "./cmd/rebootleby", package = "humility-cmd-rebootleby" }
 cmd-registers = { path = "./cmd/registers", package = "humility-cmd-registers" }
 cmd-reset = { path = "./cmd/reset", package = "humility-cmd-reset" }
+cmd-resume = { path = "./cmd/resume", package = "humility-cmd-resume" }
 cmd-rencm = { path = "./cmd/rencm", package = "humility-cmd-rencm" }
 cmd-rendmp = { path = "./cmd/rendmp", package = "humility-cmd-rendmp" }
 cmd-ringbuf = { path = "./cmd/ringbuf", package = "humility-cmd-ringbuf" }
@@ -340,6 +342,7 @@ cmd-readvar = { workspace = true }
 cmd-rebootleby.workspace = true
 cmd-registers = { workspace = true }
 cmd-reset = { workspace = true }
+cmd-resume = { workspace = true }
 cmd-rencm = { workspace = true }
 cmd-rendmp = { workspace = true }
 cmd-ringbuf = { workspace = true }
