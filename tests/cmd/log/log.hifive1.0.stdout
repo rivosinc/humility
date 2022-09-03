@@ -1,0 +1,4 @@
+humility: ring buffer ringbuf::stringbuf::LOG__STRINGBUF in jefe:
+218: Task #2 Illegal instruction
+221: Task #2 Memory fault at address 0x0
+223: Task #2 Illegal instruction

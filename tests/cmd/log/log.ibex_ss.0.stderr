@@ -1,0 +1,3 @@
+humility: attached to dump
+thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value: not a base type: Struct(Struct { name: "StringbufEntry", members: {"generation": Base(U8(10)), "payload": Base(U8(32))} })', cmd/log/src/lib.rs:109:14
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

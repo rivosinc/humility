@@ -43,6 +43,9 @@ fn make_tests() -> Result<()> {
         Test::basic("stackmargin"),
         Test::basic("tasks"),
         Test::witharg("tasks-slvr", "tasks", "-slvr"),
+        Test::basic("log"),
+        Test::witharg("log-l", "log", "-l"),
+        Test::basic("pmp"),
     ];
 
     let mut cores = vec![];
