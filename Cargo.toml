@@ -55,6 +55,7 @@ members = [
     "cmd/pmbus",
     "cmd/pmp",
     "cmd/probe",
+    "cmd/qemu",
     "cmd/qspi",
     "cmd/readmem",
     "cmd/readvar",
@@ -124,6 +125,7 @@ cmd-openocd = { path = "./cmd/openocd", package = "humility-cmd-openocd" }
 cmd-pmbus = { path = "./cmd/pmbus", package = "humility-cmd-pmbus" }
 cmd-pmp = { path = "./cmd/pmp", package = "humility-cmd-pmp" }
 cmd-probe = { path = "./cmd/probe", package = "humility-cmd-probe" }
+cmd-qemu = { path = "./cmd/qemu", package = "humility-cmd-qemu" }
 cmd-qspi = { path = "./cmd/qspi", package = "humility-cmd-qspi" }
 cmd-readmem = { path = "./cmd/readmem", package = "humility-cmd-readmem" }
 cmd-readvar = { path = "./cmd/readvar", package = "humility-cmd-readvar" }
