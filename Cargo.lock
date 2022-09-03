@@ -424,7 +424,7 @@ dependencies = [
  "bare-metal 1.0.0",
  "cfg-if",
  "cortex-m",
- "riscv",
+ "riscv 0.7.0",
 ]
 
 [[package]]
@@ -892,6 +892,7 @@ dependencies = [
  "humility-cmd-net",
  "humility-cmd-openocd",
  "humility-cmd-pmbus",
+ "humility-cmd-pmp",
  "humility-cmd-probe",
  "humility-cmd-qemu",
  "humility-cmd-qspi",
@@ -1314,6 +1315,19 @@ dependencies = [
  "log",
  "parse_int",
  "pmbus",
+]
+
+[[package]]
+name = "humility-cmd-pmp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bit_field",
+ "clap",
+ "goblin",
+ "humility-cmd",
+ "humility-core",
+ "riscv 0.8.0",
 ]
 
 [[package]]
@@ -2353,6 +2367,17 @@ dependencies = [
  "bare-metal 1.0.0",
  "bit_field",
  "riscv-target",
+]
+
+[[package]]
+name = "riscv"
+version = "0.8.0"
+source = "git+https://github.com/rivosinc/riscv?branch=rivos/dev#10d7b8572d186b887aaa71ef96ce1b26453ac74b"
+dependencies = [
+ "bare-metal 1.0.0",
+ "bit_field",
+ "embedded-hal",
+ "volatile-register",
 ]
 
 [[package]]
