@@ -893,6 +893,7 @@ dependencies = [
  "humility-cmd-openocd",
  "humility-cmd-pmbus",
  "humility-cmd-probe",
+ "humility-cmd-qemu",
  "humility-cmd-qspi",
  "humility-cmd-readmem",
  "humility-cmd-readvar",
@@ -1326,6 +1327,20 @@ dependencies = [
  "humility-cortex",
  "log",
  "num-traits",
+]
+
+[[package]]
+name = "humility-cmd-qemu"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "ctrlc",
+ "goblin",
+ "humility-cmd",
+ "humility-cmd-gdb",
+ "humility-core",
+ "tempfile",
 ]
 
 [[package]]
