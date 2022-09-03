@@ -101,6 +101,9 @@ which can have the following values:
   a halt. To recover from this condition, send an explicit ^C to the
   running GDB and continue from the resulting stop.
 
+- `qemu`: Attach via Qemu's GDB server, which is presumed to have the interface available on localhost:1234 
+  (the default when specifying `-s`).  Currently, reading registers does NOT work.
+
 - `usb`: Attach directly via USB to a debug probe.  When multiple probes
   are plugged in via USB, a probe index must be specified as a suffix
   (e.g., `usb-0`, `usb-1`, etc.)  To determine which probe is which,
@@ -231,12 +234,14 @@ a specified target.  (In the above example, one could execute `humility
 - [humility flash](#humility-flash): flash archive onto attached device
 - [humility gdb](#humility-gdb): Attach to a running system using GDB
 - [humility gpio](#humility-gpio): GPIO pin manipulation
+- [humility halt](#humility-halt): Halt the chip using debug module
 - [humility hash](#humility-hash): Access to the HASH block
 - [humility hiffy](#humility-hiffy): manipulate HIF execution
 - [humility i2c](#humility-i2c): scan for and read I2C devices
 - [humility isp](#humility-isp): run ISP commands on the LPC55
 - [humility itm](#humility-itm): commands for ARM's Instrumentation Trace Macrocell (ITM)
 - [humility jefe](#humility-jefe): influence jefe externally
+- [humility log](#humility-log): read and display a log (st)ring buffer
 - [humility lpc55gpio](#humility-lpc55gpio): LPC55 GPIO pin manipulation
 - [humility manifest](#humility-manifest): print archive manifest
 - [humility map](#humility-map): print memory map, with association of regions to tasks
@@ -244,7 +249,9 @@ a specified target.  (In the above example, one could execute `humility
 - [humility net](#humility-net): Management network device-side control and debugging
 - [humility openocd](#humility-openocd): Run OpenOCD for the given archive
 - [humility pmbus](#humility-pmbus): scan for and read PMBus devices
+- [humility pmp](#humility-pmp): print physical memory protection regions
 - [humility probe](#humility-probe): probe for any attached devices
+- [humility qemu](#humility-qemu): Launch a qemu instance running the corresponding archive
 - [humility qspi](#humility-qspi): QSPI status, reading and writing
 - [humility readmem](#humility-readmem): read and display memory region
 - [humility readvar](#humility-readvar): read and display a specified Hubris variable
@@ -252,6 +259,7 @@ a specified target.  (In the above example, one could execute `humility
 - [humility rencm](#humility-rencm): query Renesas 8A3400X ClockMatrix parts
 - [humility rendmp](#humility-rendmp): Renesas digital muliphase controller operations
 - [humility reset](#humility-reset): Reset the chip using external pins
+- [humility resume](#humility-resume): Resume the chip using debug module
 - [humility ringbuf](#humility-ringbuf): read and display a specified ring buffer
 - [humility rpc](#humility-rpc): execute Idol calls over a network
 - [humility sensors](#humility-sensors): query sensors and sensor data
@@ -653,6 +661,12 @@ For example, to configure pin 5 on port A as a push-pull output:
 
 
 
+### `humility halt`
+
+`humility halt` will halt the system using the debug pin
+
+
+
 ### `humility hash`
 
 No documentation yet for `humility hash`; pull requests welcome!
@@ -909,6 +923,36 @@ change its disposition back to restart.
 
 Finally, to start a task that is not started by default, use the `-s` flag.
 
+
+
+### `humility log`
+
+`humility log` reads and displays any Hubris string buffers (as created
+via the `stringbuf!` macro in the Hubris `ringbuf` crate).  e.g.:
+
+```console
+% humility log -m LOG_RINGBUF
+humility: attached via J-Link
+humility: ring buffer task_jefe::LOG_RINGBUF in jefe:
+instruction
+Task #2 Memory fault at address 0x0
+Task #2 Illegal instruction
+Task #2 Memory fault at address 0x0
+Task #2 Illegal instruction
+Task #2 Memory fault at address 0x0
+Task #2 Illegal instruction
+...
+```
+
+Use `-m` or `--monitor` to continuously monitor the buffer, otherwise will just print the
+current log and exit.
+
+If an argument is provided, only string buffers that have a name that
+contains the argument as a substring, or are in a task that contains
+the argument as a substring will be displayed.
+
+See the [`ringbuf`
+documentation](https://github.com/oxidecomputer/hubris/blob/master/lib/ringbuf/src/lib.rs) for more details.
 
 
 ### `humility lpc55gpio`
@@ -1216,13 +1260,42 @@ VSC8552; this is indicated with `--` in the relevant table positions.
 
 ### `humility openocd`
 
-This command launches OpenOCD based on the config file in a build archive
+This command launches OpenOCD based on the config file in a build archive,
+which then allows one to connect with either GDB or directly via telnet.
+If the intention is to only run GDB, note that `humility gdb --run-openocd`
+will both run OpenOCD and run a foreground GDB that is connected to it.
 
 
 
 ### `humility pmbus`
 
 No documentation yet for `humility pmbus`; pull requests welcome!
+
+### `humility pmp`
+
+On riscv platforms the pmp is used to prevent umode access to certain memory regions.
+This tool will decode the pmp csrs and output the memory regions and permisisons.
+Often paired with `humility map`.
+
+To better understand the memory that a task is allowed to access, one can
+run the `humility pmp` command, which shows the memory regions that have
+been granted u mode access.
+
+```console
+% humility pmp
+humility: attached via OpenOCD
+DESC       LOW          HIGH          SIZE ATTR  MODE
+pmpaddr00   0x106000 -   0x107fff    2000 r-x-  NAPOT
+pmpaddr01   0x141800 -   0x141bff     400 rw--  NAPOT
+pmpaddr02        0x0 -       0x1f      20 ----  NAPOT
+pmpaddr03        0x0 -       0x1f      20 ----  NAPOT
+pmpaddr04        0x0 -       0x1f      20 ----  NAPOT
+pmpaddr05        0x0 -       0x1f      20 ----  NAPOT
+pmpaddr06        0x0 -       0x1f      20 ----  NAPOT
+pmpaddr07        0x0 -       0x1f      20 ----  NAPOT
+```
+
+
 
 ### `humility probe`
 
@@ -1307,6 +1380,21 @@ humility:          MSP => 0x20000f48
 humility:          PSP => 0x20001ba8
 humility:          SPR => 0x7000000
 ```
+
+
+### `humility qemu`
+
+This command launches qemu with a gdb server
+
+The `--port` option can be used to specify the gdb port
+
+The `--wait` option instructs qemu to wait for a gdb client to connect
+
+The `--gdb` option can be used to launch qemu and then open a gdb console connected to it
+
+This works by parsing the qemu.sh file within the chip folder
+(`<hubris>/chips/<chipname>/qemu.sh`), then adding additional args to configure gdb
+
 
 
 ### `humility qspi`
@@ -1731,6 +1819,12 @@ humility: image CRC (0x841f35a5) matches OTP CRC
 
 `humility reset` will hard reset the system using the debug pin
 or using software reset with the appropriate flag
+
+
+### `humility resume`
+
+`humility resume` will resume the core using the debug pin
+
 
 
 ### `humility ringbuf`
