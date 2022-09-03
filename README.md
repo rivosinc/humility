@@ -249,6 +249,7 @@ a specified target.  (In the above example, one could execute `humility
 - [humility gdb](#humility-gdb): Attach to a running system using GDB
 - [humility gimlet](#humility-gimlet): Gimlet-specific diagnostic commands
 - [humility gpio](#humility-gpio): GPIO pin manipulation
+- [humility halt](#humility-halt): Halt the chip using debug module
 - [humility hash](#humility-hash): Access to the HASH block
 - [humility hiffy](#humility-hiffy): manipulate HIF execution
 - [humility host](#humility-host): Pretty-printing of host state
@@ -943,6 +944,12 @@ For example, to configure pin 5 on port A as a push-pull output:
 ```console
 $ humility gpio -c Output:PushPull:High:None:AF0 -p A:5
 ```
+
+
+
+### `humility halt`
+
+`humility halt` will halt the system using the debug interface
 
 
 

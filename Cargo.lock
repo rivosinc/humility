@@ -1234,6 +1234,7 @@ dependencies = [
  "humility-cmd-gdb",
  "humility-cmd-gimlet",
  "humility-cmd-gpio",
+ "humility-cmd-halt",
  "humility-cmd-hash",
  "humility-cmd-hiffy",
  "humility-cmd-host",
@@ -1610,6 +1611,19 @@ dependencies = [
  "humility-cmd",
  "humility-hiffy",
  "parse_int",
+]
+
+[[package]]
+name = "humility-cmd-halt"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "humility-cli",
+ "humility-cmd",
+ "humility-core",
+ "log",
+ "num-traits",
 ]
 
 [[package]]
