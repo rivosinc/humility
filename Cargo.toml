@@ -53,6 +53,7 @@ members = [
     "cmd/net",
     "cmd/openocd",
     "cmd/pmbus",
+    "cmd/pmp",
     "cmd/probe",
     "cmd/qemu",
     "cmd/qspi",
@@ -121,6 +122,7 @@ cmd-monorail = { path = "./cmd/monorail", package = "humility-cmd-monorail" }
 cmd-net = { path = "./cmd/net", package = "humility-cmd-net" }
 cmd-openocd = { path = "./cmd/openocd", package = "humility-cmd-openocd" }
 cmd-pmbus = { path = "./cmd/pmbus", package = "humility-cmd-pmbus" }
+cmd-pmp = { path = "./cmd/pmp", package = "humility-cmd-pmp" }
 cmd-probe = { path = "./cmd/probe", package = "humility-cmd-probe" }
 cmd-qemu = { path = "./cmd/qemu", package = "humility-cmd-qemu" }
 cmd-qspi = { path = "./cmd/qspi", package = "humility-cmd-qspi" }
