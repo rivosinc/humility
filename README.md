@@ -268,6 +268,7 @@ a specified target.  (In the above example, one could execute `humility
 - [humility net](#humility-net): Management network device-side control and debugging
 - [humility openocd](#humility-openocd): Run OpenOCD for the given archive
 - [humility pmbus](#humility-pmbus): scan for and read PMBus devices
+- [humility pmp](#humility-pmp): print physical memory protection regions
 - [humility power](#humility-power): show power-related information
 - [humility powershelf](#humility-powershelf): inspect powershelf over the management network
 - [humility probe](#humility-probe): probe for any attached devices
@@ -1991,6 +1992,32 @@ selected by the `--agent` command-line argument.
 
 In practice, allowing `humility pmbus` to select the agent is almost always
 what you want.
+
+
+### `humility pmp`
+
+On riscv platforms the pmp is used to prevent umode access to certain memory regions.
+This tool will decode the pmp csrs and output the memory regions and permissons.
+Often paired with `humility map`.
+
+To better understand the memory that a task is allowed to access, one can
+run the `humility pmp` command, which shows the memory regions that have
+been granted u mode access.
+
+```console
+% humility pmp
+humility: attached via OpenOCD
+DESC       LOW          HIGH          SIZE ATTR  MODE
+pmpaddr00   0x106000 -   0x107fff    2000 r-x-  NAPOT
+pmpaddr01   0x141800 -   0x141bff     400 rw--  NAPOT
+pmpaddr02        0x0 -       0x1f      20 ----  NAPOT
+pmpaddr03        0x0 -       0x1f      20 ----  NAPOT
+pmpaddr04        0x0 -       0x1f      20 ----  NAPOT
+pmpaddr05        0x0 -       0x1f      20 ----  NAPOT
+pmpaddr06        0x0 -       0x1f      20 ----  NAPOT
+pmpaddr07        0x0 -       0x1f      20 ----  NAPOT
+```
+
 
 
 ### `humility power`

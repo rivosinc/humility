@@ -168,6 +168,7 @@ fn make_all_tests() -> Result<()> {
         Test::basic(Kind::All, "manifest"),
         Test::basic(Kind::Postmortem, "spd"),
         Test::basic(Kind::All, "map"),
+        Test::basic(Kind::All, "pmp"),
         Test::basic(Kind::Postmortem, "registers"),
         Test::witharg(Kind::Postmortem, "registers-s", "registers", "-s"),
         Test::basic(Kind::Postmortem, "ringbuf"),

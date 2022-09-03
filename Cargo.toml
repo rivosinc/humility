@@ -76,6 +76,7 @@ members = [
     "cmd/net",
     "cmd/openocd",
     "cmd/pmbus",
+    "cmd/pmp",
     "cmd/power",
     "cmd/probe",
     "cmd/qemu",
@@ -184,6 +185,7 @@ cmd-monorail = { path = "./cmd/monorail", package = "humility-cmd-monorail" }
 cmd-net = { path = "./cmd/net", package = "humility-cmd-net" }
 cmd-openocd = { path = "./cmd/openocd", package = "humility-cmd-openocd" }
 cmd-pmbus = { path = "./cmd/pmbus", package = "humility-cmd-pmbus" }
+cmd-pmp = { path = "./cmd/pmp", package = "humility-cmd-pmp" }
 cmd-power = { path = "./cmd/power", package = "humility-cmd-power" }
 cmd-powershelf = { path = "./cmd/powershelf", package = "humility-cmd-powershelf" }
 cmd-probe = { path = "./cmd/probe", package = "humility-cmd-probe" }
@@ -259,6 +261,7 @@ raw-cpuid = { version = "11.0.0", features = ["display"] }
 rayon = "1.7"
 reedline = "0.11.0"
 regex = "1.5.5"
+riscv = "0.10"
 ron = "0.7"
 roxmltree = "0.15"
 rusb = "0.8.1"
@@ -338,6 +341,7 @@ cmd-monorail = { workspace = true }
 cmd-net = { workspace = true }
 cmd-openocd = { workspace = true }
 cmd-pmbus = { workspace = true }
+cmd-pmp = { workspace = true }
 cmd-power = { workspace = true }
 cmd-powershelf = { workspace = true }
 cmd-probe = { workspace = true }
@@ -386,6 +390,7 @@ indicatif = { workspace = true }
 colored = { workspace = true }
 indexmap = { workspace = true }
 reedline = { workspace = true }
+
 
 [patch.crates-io]
 libusb1-sys = { git = "https://github.com/oxidecomputer/rusb", branch = "probe-rs-0.12-libusb-v1.0.26" }

@@ -1,0 +1,14 @@
+[package]
+name = "humility-cmd-pmp"
+version = "0.1.0"
+edition = "2021"
+description = "print physical memory protection regions"
+
+[dependencies]
+humility-arch-reg.workspace = true
+humility-cli.workspace = true
+humility-cmd.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+riscv.workspace = true
+goblin.workspace = true
