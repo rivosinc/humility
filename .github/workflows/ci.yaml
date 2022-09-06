@@ -7,7 +7,20 @@ env:
   CARGO_INCREMENTAL: 0 # set here rather than on CI profile so that the tests get it too
 
 jobs:
+  skip_duplicate_jobs:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@master
+        with:
+          concurrent_skipping: 'same_content'
+          skip_after_successful_duplicate: 'true'
+          do_not_skip: '["pull_request", "workflow_dispatch", "schedule"]'
   check-msrv:
+    needs: skip_duplicate_jobs
+    if: ${{ needs.skip_duplicate_jobs.outputs.should_skip != 'true' }}
     name: Check (MSRV)
     strategy:
       matrix:
@@ -39,6 +52,8 @@ jobs:
           command: check
           args: --profile=ci
   check:
+    needs: skip_duplicate_jobs
+    if: ${{ needs.skip_duplicate_jobs.outputs.should_skip != 'true' }}
     name: Check
     strategy:
       matrix:
@@ -70,6 +85,8 @@ jobs:
           command: check
           args: --profile=ci
   test:
+    needs: skip_duplicate_jobs
+    if: ${{ needs.skip_duplicate_jobs.outputs.should_skip != 'true' }}
     name: Test
     strategy:
       matrix:
@@ -101,6 +118,8 @@ jobs:
           command: test
           args: --all --profile=ci
   clippy:
+    needs: skip_duplicate_jobs
+    if: ${{ needs.skip_duplicate_jobs.outputs.should_skip != 'true' }}
     name: Clippy
     runs-on: ubuntu-latest
     steps:
