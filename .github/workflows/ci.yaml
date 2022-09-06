@@ -11,12 +11,12 @@ jobs:
     name: Check (MSRV)
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
         include:
           - os: ubuntu-latest
             deps: sudo apt-get update && sudo apt-get install libusb-1.0-0-dev libftdi1-dev libudev-dev
-          - os: windows-latest
-            deps: vcpkg install libusb libftdi1
+         #- os: windows-latest
+         #  deps: vcpkg install libusb libftdi1
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install dependencies
@@ -42,12 +42,12 @@ jobs:
     name: Check
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
         include:
           - os: ubuntu-latest
             deps: sudo apt-get update && sudo apt-get install libusb-1.0-0-dev libftdi1-dev libudev-dev
-          - os: windows-latest
-            deps: vcpkg install libusb libftdi1
+         #- os: windows-latest
+         #  deps: vcpkg install libusb libftdi1
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install dependencies
@@ -73,12 +73,12 @@ jobs:
     name: Test
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
         include:
           - os: ubuntu-latest
             deps: sudo apt-get update && sudo apt-get install libusb-1.0-0-dev libftdi1-dev libudev-dev
-          - os: windows-latest
-            deps: vcpkg install libusb libftdi1
+         #- os: windows-latest
+         #  deps: vcpkg install libusb libftdi1
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install dependencies
