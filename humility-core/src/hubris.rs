@@ -407,17 +407,16 @@ impl HubrisArchive {
     }
 
     pub fn instr_sym(&self, addr: u32) -> Option<(&str, u32)> {
-        let sym: Option<(&str, u32)>;
-
         //
         // First, check our DWARF symbols.
         //
-        sym = match self.dsyms.range(..=addr).next_back() {
-            Some((_, sym)) if addr < sym.addr + sym.size => {
-                Some((&sym.name, sym.addr))
-            }
-            _ => None,
-        };
+        let sym: Option<(&str, u32)> =
+            match self.dsyms.range(..=addr).next_back() {
+                Some((_, sym)) if addr < sym.addr + sym.size => {
+                    Some((&sym.name, sym.addr))
+                }
+                _ => None,
+            };
 
         //
         // Fallback to our ELF symbols.
@@ -491,24 +490,20 @@ impl HubrisArchive {
             usize,
         >,
     ) -> Option<HubrisGoff> {
-        let goff;
-
-        match value {
+        let goff = match value {
             gimli::AttributeValue::UnitRef(offs) => {
-                goff = match offs.to_unit_section_offset(unit) {
+                match offs.to_unit_section_offset(unit) {
                     gimli::UnitSectionOffset::DebugInfoOffset(o) => o.0,
                     gimli::UnitSectionOffset::DebugTypesOffset(o) => o.0,
-                };
+                }
             }
 
-            gimli::AttributeValue::DebugInfoRef(offs) => {
-                goff = offs.0;
-            }
+            gimli::AttributeValue::DebugInfoRef(offs) => offs.0,
 
             _ => {
                 return None;
             }
-        }
+        };
 
         Some(HubrisGoff { object: self.current, goff })
     }
@@ -560,8 +555,7 @@ impl HubrisArchive {
             };
 
             let mut comp = None;
-            let directory;
-            if let Some(dir) = file.directory(header) {
+            let directory = if let Some(dir) = file.directory(header) {
                 let dir = dwarf.attr_string(unit, dir)?;
                 let dir = dir.to_string_lossy()?;
 
@@ -571,10 +565,10 @@ impl HubrisArchive {
                     }
                 }
 
-                directory = Some(dir.into_owned())
+                Some(dir.into_owned())
             } else {
-                directory = None
-            }
+                None
+            };
 
             let s = dwarf.attr_string(unit, file.path_name())?;
             let file = s.to_string_lossy()?.into_owned();
@@ -2772,14 +2766,11 @@ impl HubrisArchive {
     pub fn qualified_variables(
         &self,
     ) -> impl Iterator<Item = (&str, &HubrisVariable)> {
-        self.qualified_variables
-            .iter_all()
-            .map(|(n, v)| {
-                v.iter()
-                    .map(|e| (n.as_str(), e))
-                    .collect::<Vec<(&str, &HubrisVariable)>>()
-            })
-            .flatten()
+        self.qualified_variables.iter_all().flat_map(|(n, v)| {
+            v.iter()
+                .map(|e| (n.as_str(), e))
+                .collect::<Vec<(&str, &HubrisVariable)>>()
+        })
     }
 
     pub fn lookup_module(&self, task: HubrisTask) -> Result<&HubrisModule> {
@@ -4926,7 +4917,7 @@ fn try_scoped<'a>(
     kind: &'static str,
     map: &'a MultiMap<String, HubrisGoff>,
 ) -> Result<&'a str> {
-    let search = name.replace("<", "<.*::");
+    let search = name.replace('<', "<.*::");
 
     if search == name {
         Err(anyhow!("expected {} not found", kind))
