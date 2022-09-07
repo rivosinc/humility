@@ -241,7 +241,7 @@ fn deltas(
     compare: &[(u32, Vec<u8>)],
     mut diff: impl FnMut(u32, &[u8]) -> Result<()>,
 ) -> Result<()> {
-    let filelen = fs::metadata(filename.to_string())?.len() as u32;
+    let filelen = fs::metadata(filename)?.len() as u32;
     let mut file = File::open(filename)?;
 
     let mut offset = 0;
