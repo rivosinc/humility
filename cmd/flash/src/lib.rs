@@ -159,22 +159,31 @@ fn force_openocd(
 
     if let Some(serial) = serial {
         humility::msg!("specifying serial {}", serial);
-
-        //
-        // In OpenOCD 0.11 dev, hla_serial has been deprecated, and
-        // using it results in this warning:
-        //
-        //   DEPRECATED! use 'adapter serial' not 'hla_serial'
-        //
-        // Unfortunately, the newer variant ("adapter serial") does
-        // not exist prior to this interface being deprecated; in
-        // order to allow execution on older OpenOCD variants, we
-        // deliberately use the deprecated interface.  (And yes, it
-        // would probably be convenient if OpenOCD just made the old
-        // thing work instead of shouting about it and then doing it
-        // anyway.)
-        //
-        writeln!(conf, "interface hla\nhla_serial {}", serial)?;
+        //jlink adapter does not support hla
+        if let FlashProgramConfig::Payload(payload) = payload {
+            if payload.contains("jlink") {
+                //TODO find alternative to support specifying serial with jlink
+                // perhaps `writeln!(conf, "adapter serial {}", serial)?;`
+                //
+                humility::msg!("using jlink adapter, cannot specify serial");
+            }
+        } else {
+            //
+            // In OpenOCD 0.11 dev, hla_serial has been deprecated, and
+            // using it results in this warning:
+            //
+            //   DEPRECATED! use 'adapter serial' not 'hla_serial'
+            //
+            // Unfortunately, the newer variant ("adapter serial") does
+            // not exist prior to this interface being deprecated; in
+            // order to allow execution on older OpenOCD variants, we
+            // deliberately use the deprecated interface.  (And yes, it
+            // would probably be convenient if OpenOCD just made the old
+            // thing work instead of shouting about it and then doing it
+            // anyway.)
+            //
+            writeln!(conf, "interface hla\nhla_serial {}", serial)?;
+        }
     }
 
     if let FlashProgramConfig::Payload(ref payload) = payload {
