@@ -107,9 +107,9 @@ fn ringbuf_dump(
     let mut buf: Vec<u8> = vec![];
     buf.resize_with(ringbuf_var.size, Default::default);
 
-    core.halt()?;
+    core.op_start()?;
     core.read_8(ringbuf_var.addr, buf.as_mut_slice())?;
-    core.run()?;
+    core.op_done()?;
 
     // There are three possible shapes of ringbufs, depending on the age of the
     // firmware.

@@ -246,7 +246,7 @@ fn registers(context: &mut ExecutionContext) -> Result<()> {
         }
     }
 
-    core.halt()?;
+    core.op_start()?;
 
     let regions = match hubris.regions(core) {
         Ok(regions) => regions,
@@ -352,7 +352,7 @@ fn registers(context: &mut ExecutionContext) -> Result<()> {
         }
     }
 
-    core.run()?;
+    core.op_done()?;
 
     Ok(())
 }
