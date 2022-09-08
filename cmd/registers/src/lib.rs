@@ -132,12 +132,11 @@
 use anyhow::{bail, Result};
 use clap::Command as ClapCommand;
 use clap::{CommandFactory, Parser};
-use humility::arch::{ARMRegister, ARMRegisterField};
 use humility::core::Core;
 use humility::hubris::*;
+use humility::regs::{Register, RegisterField};
 use humility_cmd::{Archive, Attach, Command, Run, Validate};
 use humility_cortex::debug::*;
-use num_traits::FromPrimitive;
 use std::collections::BTreeMap;
 
 #[derive(Parser, Debug)]
@@ -156,7 +155,7 @@ struct RegistersArgs {
     fp: bool,
 }
 
-fn print_reg(reg: ARMRegister, val: u32, fields: &[ARMRegisterField]) {
+fn print_reg(reg: Register, val: u32, fields: &[RegisterField]) {
     print!("{:>5} = 0x{:08x} <- ", reg, val);
     let indent = 5 + "= 0x00000000 <- ".len();
 
@@ -170,7 +169,7 @@ fn print_reg(reg: ARMRegister, val: u32, fields: &[ARMRegisterField]) {
         }
     }
 
-    fn print_bars(f: &[ARMRegisterField], elbow: bool) {
+    fn print_bars(f: &[RegisterField], elbow: bool) {
         let mut pos = 32;
 
         for i in 0..f.len() {
@@ -270,14 +269,9 @@ fn registers(
     //
     // Read all of our registers first...
     //
-    for i in 0..=ARMRegister::max() {
-        let reg = match ARMRegister::from_u16(i) {
-            Some(r) => r,
-            None => {
-                continue;
-            }
-        };
-
+    let reg_iter: Vec<Register> =
+        hubris.arch.as_ref().unwrap().get_all_registers();
+    for reg in reg_iter {
         if reg.is_floating_point() && !subargs.fp {
             continue;
         }
@@ -285,6 +279,7 @@ fn registers(
         let val = match core.read_reg(reg) {
             Ok(val) => val,
             Err(_) => {
+                log::trace!("skipping register {}", reg);
                 continue;
             }
         };
@@ -320,7 +315,7 @@ fn registers(
             }
         );
 
-        if subargs.stack && *reg == ARMRegister::SP {
+        if subargs.stack && *reg == hubris.arch.as_ref().unwrap().get_sp() {
             if let Some((_, region)) = regions.range(..=val).next_back() {
                 let task = if region.tasks.len() == 1 {
                     region.tasks[0]
