@@ -82,7 +82,12 @@ fn gdb(
 
     let mut gdb_cmd = None;
 
-    const GDB_NAMES: [&str; 2] = ["arm-none-eabi-gdb", "gdb-multiarch"];
+    const GDB_NAMES: [&str; 4] = [
+        "arm-none-eabi-gdb",
+        "riscv32-none-elf-gdb",
+        "riscv32-unknown-elf-gdb",
+        "gdb-multiarch",
+    ];
     for candidate in &GDB_NAMES {
         if Command::new(candidate)
             .arg("--version")
@@ -108,6 +113,7 @@ fn gdb(
             self.0.kill().expect("Could not kill `openocd`")
         }
     }
+    //TODO feel like this should just call to humility openocd
     let _openocd = if subargs.run_openocd {
         hubris
             .extract_file_to(
