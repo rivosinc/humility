@@ -5,6 +5,7 @@
 use anyhow::{bail, Result};
 use clap::Command as ClapCommand;
 use clap::{CommandFactory, Parser};
+use humility::arch::arm::arm_instr_target;
 use humility::core::Core;
 use humility::hubris::*;
 use humility::warn;
@@ -434,7 +435,7 @@ fn etmcmd_ingest(config: &TraceConfig, filename: &str) -> Result<()> {
                     }
                 };
 
-                target = (Some(addr), hubris.instr_target(addr));
+                target = (Some(addr), arm_instr_target(hubris, addr));
                 etmcmd_trace(
                     config,
                     &TraceInstruction {
