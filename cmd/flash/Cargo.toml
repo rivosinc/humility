@@ -6,7 +6,7 @@ description = "flash archive onto attached device"
 
 [dependencies]
 humility = { workspace = true }
-humility-cortex = { workspace = true }
+humility-platform = { workspace = true }
 humility-cmd = { workspace = true }
 humility-cli = { workspace = true }
 cmd-auxflash = { workspace = true }

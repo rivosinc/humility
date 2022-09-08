@@ -13,7 +13,8 @@
 use anyhow::{anyhow, bail, Context, Result};
 use clap::{CommandFactory, Parser};
 use humility::core::Core;
-use humility_arch_arm::ARMRegister;
+use humility_arch_reg::arm::ARMRegister;
+use humility_arch_reg::Register;
 use humility_cli::{ExecutionContext, Subcommand};
 use humility_cmd::{Archive, Attach, Command, CommandKind, Validate};
 use std::io::Read;
@@ -176,7 +177,7 @@ impl FlashHack<'_> {
         self.core.halt()?;
         // Branch to self instruction
         self.poke(0x1400_0000, 0xe7fee7fe)?;
-        self.core.write_reg(ARMRegister::PC, 0x1400_0000)?;
+        self.core.write_reg(Register::Arm(ARMRegister::PC), 0x1400_0000)?;
 
         // We have to clear the super sekrit bits to have this work on
         // the CFPA/CMPA region. No these are not documented!

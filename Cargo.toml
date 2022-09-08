@@ -25,8 +25,8 @@ rust-version = "1.68"
 
 [workspace]
 members = [
-    "humility-arch-arm",
-    "humility-arch-cortex",
+    "humility-arch",
+    "humility-arch-reg",
     "humility-cmd",
     "humility-cli",
     "humility-core",
@@ -38,6 +38,7 @@ members = [
     "humility-jefe",
     "humility-log",
     "humility-net-core",
+    "humility-platform",
     "humility-pmbus",
     "humility-stack",
     "cmd/apptable",
@@ -130,8 +131,8 @@ capstone = {git = "https://github.com/oxidecomputer/capstone-rs.git"}
 
 # Local `path`-based deps
 humility = { path = "./humility-core", package = "humility-core" }
-humility-arch-arm = { path = "./humility-arch-arm" }
-humility-cortex = { path = "./humility-arch-cortex" }
+humility-arch = { path = "./humility-arch" }
+humility-arch-reg = { path = "./humility-arch-reg" }
 humility-cmd = { path = "./humility-cmd" }
 humility-cli = { path = "./humility-cli" }
 humility-dump-agent = { path = "./humility-dump-agent" }
@@ -143,6 +144,7 @@ humility-jefe = { path = "./humility-jefe" }
 humility_load_derive = { path = "./load_derive" }
 humility-log = { path = "./humility-log" }
 humility-net-core = { path = "./humility-net-core" }
+humility-platform = { path = "./humility-platform" }
 humility-pmbus = { path = "./humility-pmbus" }
 humility-stack = { path = "./humility-stack" }
 cmd-apptable = { path = "./cmd/apptable", package = "humility-cmd-apptable" }
@@ -290,7 +292,7 @@ pmbus = { workspace = true }
 hif = { workspace = true }
 spd = { workspace = true }
 humility = { workspace = true }
-humility-cortex = { workspace = true }
+humility-platform = { workspace = true }
 humility-cmd = { workspace = true }
 humility-cli = { workspace = true }
 cmd-apptable = { workspace = true }

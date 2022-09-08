@@ -19,7 +19,7 @@ use humility::{
     msg,
     net::ScopedV6Addr,
 };
-use humility_arch_arm::ARMRegister;
+use humility_arch_reg::Register;
 use humility_dump_agent::{
     DumpAgent, DumpAgentCore, DumpAgentExt, DumpArea, UdpDumpAgent,
 };
@@ -357,11 +357,11 @@ impl Core for NetCore {
         self.read(addr, data)
     }
 
-    fn read_reg(&mut self, reg: ARMRegister) -> Result<u32> {
+    fn read_reg(&mut self, reg: Register) -> Result<u32> {
         bail!("cannot read register {} over network", reg);
     }
 
-    fn write_reg(&mut self, reg: ARMRegister, _value: u32) -> Result<()> {
+    fn write_reg(&mut self, reg: Register, _value: u32) -> Result<()> {
         bail!("cannot write register {} over network", reg);
     }
 

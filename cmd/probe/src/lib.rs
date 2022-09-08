@@ -89,13 +89,14 @@
 use anyhow::{bail, Result};
 use clap::{CommandFactory, Parser};
 use humility::hubris::HubrisValidate;
-use humility_arch_arm::ARMRegister;
+use humility_arch_reg::arm::ARMRegister;
+use humility_arch_reg::Register;
 use humility_cli::{ExecutionContext, Subcommand};
 use humility_cmd::CommandKind;
 use humility_cmd::{Archive, Attach, Command, Validate};
-use humility_cortex::debug::*;
-use humility_cortex::itm::*;
-use humility_cortex::scs::*;
+use humility_platform::cortex::debug::*;
+use humility_platform::cortex::itm::*;
+use humility_platform::cortex::scs::*;
 
 #[derive(Parser, Debug)]
 #[clap(name = "probe", about = env!("CARGO_PKG_DESCRIPTION"))]
@@ -258,13 +259,17 @@ fn probecmd(context: &mut ExecutionContext) -> Result<()> {
             //
             let rval = core
                 .halt()
-                .and_then(|_| core.read_reg(ARMRegister::PC))
+                .and_then(|_| {
+                    core.read_reg(hubris.arch.as_ref().unwrap().get_pc())
+                })
                 .and_then(|val| {
                     core.step()?;
                     Ok(val)
                 })
                 .and_then(|val| {
-                    if core.read_reg(ARMRegister::PC)? == val {
+                    if core.read_reg(hubris.arch.as_ref().unwrap().get_pc())?
+                        == val
+                    {
                         Ok("not progressing")
                     } else {
                         Ok("progressing")
@@ -375,7 +380,7 @@ fn probecmd(context: &mut ExecutionContext) -> Result<()> {
 
     for i in 0..31 {
         let reg = match ARMRegister::from_u16(i) {
-            Some(r) => r,
+            Some(r) => Register::Arm(r),
             None => {
                 continue;
             }

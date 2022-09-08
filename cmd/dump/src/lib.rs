@@ -69,7 +69,6 @@ use anyhow::{anyhow, bail, Result};
 use clap::{ArgGroup, CommandFactory, Parser};
 use humility::core::Core;
 use humility::hubris::*;
-use humility_arch_arm::ARMRegister;
 use humility_cli::{ExecutionContext, Subcommand};
 use humility_cmd::{Archive, Attach, Command, CommandKind, Validate};
 use humility_dump_agent::{
@@ -78,7 +77,7 @@ use humility_dump_agent::{
 };
 use humpty::DumpTask;
 use indicatif::{HumanBytes, HumanDuration, ProgressBar, ProgressStyle};
-use num_traits::FromPrimitive;
+use num_traits::ToPrimitive;
 use std::cell::RefCell;
 use std::time::Instant;
 
@@ -191,6 +190,7 @@ struct DumpArgs {
 ////////////////////////////////////////////////////////////////////////////////
 
 fn emulate_dump(
+    hubris: &HubrisArchive,
     core: &mut dyn Core,
     task: Option<DumpTask>,
     base: u32,
@@ -206,19 +206,19 @@ fn emulate_dump(
         "humility: dumping in situ [{bar:30}] {bytes}/{total_bytes}",
     ));
 
-    let mut rnum = 0;
+    let regs = hubris.arch.as_ref().unwrap().get_all_registers();
+    let mut regs_iter = regs.iter();
 
     let r = humpty::dump::<anyhow::Error, 2048, { humpty::DUMPER_EMULATED }>(
         base,
         task,
         || {
-            let start = rnum;
-
-            for i in start..=31 {
-                if let Some(reg) = ARMRegister::from_u16(i) {
-                    let val = shared.borrow_mut().read_reg(reg)?;
-                    rnum = i + 1;
-                    return Ok(Some(humpty::RegisterRead(i, val)));
+            for reg in regs_iter.by_ref() {
+                if let Ok(val) = shared.borrow_mut().read_reg(*reg) {
+                    return Ok(Some(humpty::RegisterRead(
+                        reg.to_u16().unwrap(),
+                        val,
+                    )));
                 }
             }
             Ok(None)
@@ -383,9 +383,8 @@ fn dump_via_agent(
                 }
             }
             None => {
-                for i in 0..=ARMRegister::max() {
-                    if let Some(reg) = ARMRegister::from_u16(i) {
-                        let val = core.read_reg(reg)?;
+                for reg in hubris.arch.as_ref().unwrap().get_all_registers() {
+                    if let Ok(val) = core.read_reg(reg) {
                         out.add_register(reg, val);
                     }
                 }
@@ -530,7 +529,7 @@ fn dump_via_agent(
                 base
             };
 
-            emulate_dump(agent.core(), task, address, total)?;
+            emulate_dump(hubris, agent.core(), task, address, total)?;
             agent.core().run()?;
             humility::msg!("core resumed");
         } else if !subargs.force_read && subargs.area.is_none() {

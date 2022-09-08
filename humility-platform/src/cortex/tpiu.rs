@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::debug::Register;
+use crate::cortex::debug::Register;
 use crate::register;
 use anyhow::Result;
 use bitfield::bitfield;
@@ -316,7 +316,7 @@ fn tpiu_process_frame(
                     // We have no old ID -- we are going to discard this
                     // byte, but also warn about it.
                     //
-                    warn!("orphaned byte at offset {}", packet.offset);
+                    log::warn!("orphaned byte at offset {}", packet.offset);
                 }
             }
 
@@ -532,7 +532,7 @@ pub fn tpiu_ingest(
                 // and resume our search for a frame.
                 //
                 if !tpiu_check_frame(&frame, valid, true) {
-                    warn!(
+                    log::warn!(
                         "after {} frame{}, invalid frame at offset {}",
                         nvalid,
                         if nvalid == 1 { "" } else { "s" },

@@ -18,7 +18,8 @@
 use anyhow::{anyhow, bail, Context, Result};
 use core::mem::size_of;
 use humility::{core::Core, hubris::HubrisFlashMap, msg};
-use humility_arch_arm::ARMRegister;
+use humility_arch_reg::arm::ARMRegister;
+use humility_arch_reg::Register;
 use humpty::{
     DumpAreaHeader, DumpRegister, DumpSegment, DumpSegmentData,
     DumpSegmentHeader, DumpTask,
@@ -94,7 +95,7 @@ pub enum DumpArea {
 pub struct DumpAgentCore {
     flash: HubrisFlashMap,
     ram_regions: BTreeMap<u32, Vec<u8>>,
-    registers: HashMap<ARMRegister, u32>,
+    registers: HashMap<Register, u32>,
 }
 
 impl DumpAgentCore {
@@ -110,7 +111,7 @@ impl DumpAgentCore {
         self.ram_regions.insert(addr, contents);
     }
 
-    pub fn add_register(&mut self, reg: ARMRegister, val: u32) {
+    pub fn add_register(&mut self, reg: Register, val: u32) {
         self.registers.insert(reg, val);
     }
 
@@ -201,7 +202,8 @@ impl DumpAgentCore {
                     //
                     // These are register values; slurp them and continue.
                     //
-                    if let Some(register) = ARMRegister::from_u16(reg.register)
+                    if let Some(register) =
+                        ARMRegister::from_u16(reg.register).map(Register::Arm)
                     {
                         self.add_register(register, reg.value);
                     } else {
@@ -263,14 +265,14 @@ impl Core for DumpAgentCore {
         self.read(addr, data)
     }
 
-    fn read_reg(&mut self, reg: ARMRegister) -> Result<u32> {
+    fn read_reg(&mut self, reg: Register) -> Result<u32> {
         match self.registers.get(&reg) {
             Some(val) => Ok(*val),
             None => bail!("unexpected read from register {reg:?}"),
         }
     }
 
-    fn write_reg(&mut self, reg: ARMRegister, _value: u32) -> Result<()> {
+    fn write_reg(&mut self, reg: Register, _value: u32) -> Result<()> {
         bail!("cannot write register {} over dump agent", reg);
     }
 

@@ -13,13 +13,14 @@ use clap::{CommandFactory, Parser};
 use humility::core::Core;
 use humility::hubris::*;
 use humility::warn;
+use humility_arch::InstrTarget;
 use humility_cli::{ExecutionContext, Subcommand};
 use humility_cmd::{attach_live, CommandKind};
 use humility_cmd::{Archive, Command};
-use humility_cortex::debug::*;
-use humility_cortex::etm::*;
-use humility_cortex::scs::*;
-use humility_cortex::tpiu::*;
+use humility_platform::cortex::debug::*;
+use humility_platform::cortex::etm::*;
+use humility_platform::cortex::scs::*;
+use humility_platform::cortex::tpiu::*;
 use std::fs::File;
 use std::time::Instant;
 
@@ -64,7 +65,7 @@ struct TraceInstruction {
     nsecs: u64,
     addr: u32,
     _len: u32,
-    target: Option<HubrisTarget>,
+    target: Option<InstrTarget>,
     skipped: bool,
 }
 
@@ -83,7 +84,7 @@ struct TraceConfig<'a> {
 #[derive(Debug, Default)]
 struct TraceState {
     indent: usize,
-    target: Option<HubrisTarget>,
+    target: Option<InstrTarget>,
     inlined: Vec<HubrisGoff>,
     stack: Vec<(usize, Vec<HubrisGoff>, u32)>,
 }
@@ -298,7 +299,7 @@ fn etmcmd_trace(
     let inlined = hubris.instr_inlined(addr, sym.1);
 
     match state.target {
-        Some(HubrisTarget::Call(_)) | Some(HubrisTarget::IndirectCall) => {
+        Some(InstrTarget::Call(_)) | Some(InstrTarget::IndirectCall) => {
             state.indent += 2;
             println!("{:-10} {:width$}-> {}:{}", instr.nsecs, "", module, sym.0,
                 width = state.indent);
@@ -325,7 +326,7 @@ fn etmcmd_trace(
     state.target = instr.target;
 
     match instr.target {
-        Some(HubrisTarget::Call(_)) | Some(HubrisTarget::IndirectCall) => {
+        Some(InstrTarget::Call(_)) | Some(InstrTarget::IndirectCall) => {
             let mut nindent = state.indent;
 
             if !inlined.is_empty() {
@@ -343,7 +344,7 @@ fn etmcmd_trace(
             return Ok(());
         }
 
-        Some(HubrisTarget::Return) => {
+        Some(InstrTarget::Return) => {
             println!("{:-10} {:width$}<- {}:{}", instr.nsecs, "", module, sym.0,
                 width = state.indent);
 
@@ -392,7 +393,7 @@ fn etmcmd_ingest(config: &TraceConfig, filename: &str) -> Result<()> {
 
     let mut iter = rdr.deserialize();
     let mut broken = false;
-    let mut target: (Option<u32>, Option<HubrisTarget>) = (None, None);
+    let mut target: (Option<u32>, Option<InstrTarget>) = (None, None);
 
     let mut state = TraceState::default();
 
@@ -495,11 +496,8 @@ fn etmcmd_ingest(config: &TraceConfig, filename: &str) -> Result<()> {
                     lastaddr = curaddr;
 
                     match target {
-                        (
-                            Some(origin),
-                            Some(HubrisTarget::Direct(expected)),
-                        )
-                        | (Some(origin), Some(HubrisTarget::Call(expected))) => {
+                        (Some(origin), Some(InstrTarget::Direct(expected)))
+                        | (Some(origin), Some(InstrTarget::Call(expected))) => {
                             if curaddr.unwrap() != expected {
                                 warn!(
                                     "detected bad branch: at 0x{:x} expected \

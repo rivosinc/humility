@@ -7,6 +7,7 @@ use anyhow::{anyhow, Result};
 use bitfield::bitfield;
 use humility::core::Core;
 use humility::hubris::*;
+use num_derive::FromPrimitive;
 
 pub trait Register:
     Clone + From<u32> + Into<u32> + Sized + std::fmt::Debug

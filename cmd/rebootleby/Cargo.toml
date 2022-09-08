@@ -6,8 +6,8 @@ description = "Do something kind of like embootleby to recover a device with bad
 
 [dependencies]
 humility = { workspace = true }
-humility-arch-arm = { workspace = true }
-humility-cortex = { workspace = true }
+humility-arch-reg = { workspace = true }
+humility-platform = { workspace = true }
 humility-cmd = { workspace = true }
 humility-cli = { workspace = true }
 clap = { workspace = true }

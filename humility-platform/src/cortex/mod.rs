@@ -9,9 +9,3 @@ pub mod itm;
 pub mod scs;
 pub mod swo;
 pub mod tpiu;
-
-#[macro_use]
-extern crate num_derive;
-
-#[macro_use]
-extern crate log;

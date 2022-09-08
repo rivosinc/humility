@@ -6,7 +6,7 @@ description = "commands for ARM's Instrumentation Trace Macrocell (ITM)"
 
 [dependencies]
 humility = { workspace = true }
-humility-cortex = { workspace = true }
+humility-platform = { workspace = true }
 humility-cli = { workspace = true }
 humility-cmd = { workspace = true }
 

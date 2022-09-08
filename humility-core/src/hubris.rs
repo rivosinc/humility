@@ -3,7 +3,8 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use capstone::prelude::*;
-use humility_arch_arm::{presyscall_pushes, ARMRegister};
+use humility_arch::{get_arch, Arch, InstrTarget};
+use humility_arch_reg::Register;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::io::prelude::*;
@@ -22,14 +23,13 @@ use std::time::Instant;
 
 use crate::{msg, warn};
 use anyhow::{anyhow, bail, ensure, Context, Result};
-use capstone::InsnGroupType;
 use fallible_iterator::FallibleIterator;
 use gimli::UnwindSection;
 use goblin::elf::Elf;
 use humpty::DumpTask;
 use idol::syntax::Interface;
 use multimap::MultiMap;
-use num_traits::FromPrimitive;
+use num_traits::ToPrimitive;
 use rustc_demangle::demangle;
 use scroll::{IOwrite, Pwrite};
 use zerocopy::{AsBytes, FromBytes};
@@ -600,6 +600,9 @@ pub struct HubrisArchive {
     // constructed manifest
     pub manifest: HubrisManifest,
 
+    // MCU architecture
+    pub arch: Option<Box<dyn Arch>>,
+
     // app table
     apptable: Option<(u32, Vec<u8>)>,
 
@@ -617,13 +620,13 @@ pub struct HubrisArchive {
 
     // Instructions: address to bytes/target tuple. The target will be None if
     // the instruction did not decode as some kind of jump/branch/call.
-    instrs: HashMap<u32, (Vec<u8>, Option<HubrisTarget>)>,
+    pub instrs: HashMap<u32, (Vec<u8>, Option<InstrTarget>)>,
 
     // Manual stack pushes before a syscall
-    syscall_pushes: HashMap<u32, Option<Vec<ARMRegister>>>,
+    syscall_pushes: HashMap<u32, Option<Vec<Register>>>,
 
     // Current registers (if a dump)
-    registers: HashMap<ARMRegister, u32>,
+    registers: HashMap<Register, u32>,
 
     // Modules: text address to module
     modules: BTreeMap<u32, HubrisModule>,
@@ -703,6 +706,7 @@ impl HubrisArchive {
     pub fn new() -> Result<HubrisArchive> {
         Ok(Self {
             archive: Vec::new(),
+            arch: None,
             apptable: None,
             imageid: None,
             manifest: Default::default(),
@@ -742,16 +746,6 @@ impl HubrisArchive {
         self.instrs.get(&addr).map(|instr| instr.0.len() as u32)
     }
 
-    /// Looks up the jump target type of the previously-disassembled instruction
-    /// at `addr`. Returns `None` if the instruction was did not affect control
-    /// flow.
-    ///
-    /// TODO: this also returns `None` if `addr` is not an instruction boundary,
-    /// which is probably wrong but we haven't totally thought it through yet.
-    pub fn instr_target(&self, addr: u32) -> Option<HubrisTarget> {
-        self.instrs.get(&addr).and_then(|&(_, target)| target)
-    }
-
     pub fn instr_mod(&self, addr: u32) -> Option<&str> {
         if let Some(module) = self.modules.range(..=addr).next_back() {
             if addr < *module.0 + module.1.textsize {
@@ -784,6 +778,10 @@ impl HubrisArchive {
             }
             _ => None,
         })
+    }
+
+    pub fn instr_target(&self, addr: u32) -> Option<InstrTarget> {
+        self.instrs.get(&addr).and_then(|instr| instr.1)
     }
 
     pub fn instr_inlined(&self, pc: u32, base: u32) -> Vec<HubrisInlined> {
@@ -1407,6 +1405,9 @@ impl HubrisArchive {
     }
 
     fn merge(&mut self, loader: HubrisObjectLoader) -> Result<()> {
+        if self.arch.is_none() && loader.arch.is_some() {
+            self.arch = loader.arch;
+        }
         if loader.imageid.is_some() {
             self.imageid = loader.imageid;
         }
@@ -1659,9 +1660,9 @@ impl HubrisArchive {
             let id = u32::from_le_bytes(id.try_into().unwrap());
             let val = u32::from_le_bytes(val.try_into().unwrap());
 
-            let reg = match ARMRegister::from_u32(id) {
-                Some(r) => r,
-                None => {
+            let reg = match self.arch.as_ref().unwrap().register_from_id(id) {
+                Ok(r) => r,
+                Err(_err) => {
                     // This can totally happen if we encounter a future coredump
                     // where we decided to store, say, additional MSRs or a
                     // floating point register. Since this version of Humility
@@ -1690,6 +1691,8 @@ impl HubrisArchive {
         let elf = Elf::parse(&contents).map_err(|e| {
             anyhow!("failed to parse {} as an ELF file: {}", dumpfile, e)
         })?;
+
+        self.arch = Some(get_arch(elf.header.e_machine));
 
         if let Some(notes) = elf.iter_note_headers(&contents) {
             for note in notes {
@@ -2219,7 +2222,8 @@ impl HubrisArchive {
         if let Some(sym) = self.esyms_byname.get("Reset") {
             core.halt()?;
 
-            if let Ok(pc) = core.read_reg(ARMRegister::PC) {
+            if let Ok(pc) = core.read_reg(self.arch.as_ref().unwrap().get_pc())
+            {
                 core.run()?;
 
                 if pc >= sym.0 && pc < sym.0 + sym.1 {
@@ -2682,7 +2686,7 @@ impl HubrisArchive {
         Ok(regions)
     }
 
-    pub fn dump_registers(&self) -> HashMap<ARMRegister, u32> {
+    pub fn dump_registers(&self) -> HashMap<Register, u32> {
         self.registers.clone()
     }
 
@@ -2690,7 +2694,7 @@ impl HubrisArchive {
         &self,
         core: &mut dyn crate::core::Core,
         t: HubrisTask,
-    ) -> Result<BTreeMap<ARMRegister, u32>> {
+    ) -> Result<BTreeMap<Register, u32>> {
         let (base, _) = self.task_table(core)?;
         let cur = self.current_task(core)?;
 
@@ -2718,7 +2722,7 @@ impl HubrisArchive {
         // If this is the current task, we want to pull the current PC.
         //
         if cur == Some(t) {
-            let pc = core.read_reg(ARMRegister::PC)?;
+            let pc = core.read_reg(self.arch.as_ref().unwrap().get_pc())?;
 
             //
             // If the PC falls within the task, then we are at user-level,
@@ -2733,14 +2737,9 @@ impl HubrisArchive {
                 };
 
             if userland {
-                for i in 0..=31 {
-                    let reg = match ARMRegister::from_u16(i) {
-                        Some(r) => r,
-                        None => {
-                            continue;
-                        }
-                    };
-
+                for reg in
+                    self.arch.as_ref().unwrap().get_saved_task_registers()
+                {
                     let val = core.read_reg(reg)?;
                     rval.insert(reg, val);
                 }
@@ -2749,73 +2748,19 @@ impl HubrisArchive {
             }
         };
 
-        let readreg = |rname| -> Result<u32> {
+        let read_reg = |rname: &str| -> Result<u32> {
             let o = state.lookup_member(rname)?.offset;
             Ok(u32::from_le_bytes(regs[o..o + 4].try_into().unwrap()))
         };
+        let mut read_mem = |addr: u32, data: &mut [u8]| -> Result<()> {
+            core.read_8(addr, data)
+        };
 
-        //
-        // R4-R11 are found in the structure.
-        //
-        for r in 4..=11 {
-            let rname = format!("r{}", r);
-            let o = state.lookup_member(&rname)?.offset;
-            let val = u32::from_le_bytes(regs[o..o + 4].try_into().unwrap());
-
-            rval.insert(ARMRegister::from_usize(r).unwrap(), val);
-        }
-
-        let sp = readreg("psp")?;
-
-        const NREGS_CORE: usize = 8;
-
-        let mut stack: Vec<u8> = vec![];
-        stack.resize_with(NREGS_CORE * 4, Default::default);
-        core.read_8(sp, stack.as_mut_slice())?;
-
-        //
-        // R0-R3, and then R12, LR and the PSR are found on the stack
-        //
-        for r in 0..NREGS_CORE {
-            let o = r * 4;
-            let val = u32::from_le_bytes(stack[o..o + 4].try_into().unwrap());
-
-            let reg = match r {
-                0..=3 => ARMRegister::from_usize(r).unwrap(),
-                4 => ARMRegister::R12,
-                5 => ARMRegister::LR,
-                6 => ARMRegister::PC,
-                7 => ARMRegister::PSR,
-                _ => panic!("bad register value"),
-            };
-
-            rval.insert(reg, val);
-        }
-
-        //
-        // Not all architectures have floating point -- and ARMv6 never has
-        // it.  (Note that that the FP contents pushed onto the stack is
-        // always 8-byte aligned; if we have our 17 floating point registers
-        // here, we also have an unstored pad.)
-        //
-        let (nregs_fp, align) =
-            if self.manifest.target.as_ref().unwrap() == "thumbv6m-none-eabi" {
-                (0, 0)
-            } else {
-                (17, 1)
-            };
-
-        let nregs_frame: usize = NREGS_CORE + nregs_fp + align;
-
-        //
-        // We manually adjust our stack pointer to peel off the entire frame,
-        // plus any needed re-alignment.
-        //
-        let adjust = (nregs_frame as u32) * 4
-            + humility_arch_arm::exception_stack_realign(&rval);
-
-        rval.insert(ARMRegister::SP, sp + adjust);
-
+        rval.append(&mut self.arch.as_ref().unwrap().read_saved_task_regs(
+            &read_reg,
+            &mut read_mem,
+            self.manifest.target.as_ref().unwrap(),
+        )?);
         Ok(rval)
     }
 
@@ -2824,14 +2769,14 @@ impl HubrisArchive {
         core: &mut dyn crate::core::Core,
         task: HubrisTask,
         limit: u32,
-        regs: &BTreeMap<ARMRegister, u32>,
+        regs: &BTreeMap<Register, u32>,
     ) -> Result<Vec<HubrisStackFrame>> {
         let regions = self.regions(core)?;
         let sp = regs
-            .get(&ARMRegister::SP)
+            .get(&self.arch.as_ref().unwrap().get_sp())
             .ok_or_else(|| anyhow!("SP missing from regs map"))?;
         let pc = regs
-            .get(&ARMRegister::PC)
+            .get(&self.arch.as_ref().unwrap().get_pc())
             .ok_or_else(|| anyhow!("PC missing from regs map"))?;
 
         let mut rval: Vec<HubrisStackFrame> = Vec::new();
@@ -2872,7 +2817,10 @@ impl HubrisArchive {
                 frameregs.insert(p, val);
             }
 
-            frameregs.insert(ARMRegister::SP, sp + (pushed.len() * 4) as u32);
+            frameregs.insert(
+                self.arch.as_ref().unwrap().get_sp(),
+                sp + (pushed.len() * 4) as u32,
+            );
         }
 
         let frames = self
@@ -2886,7 +2834,8 @@ impl HubrisArchive {
         loop {
             let bases = gimli::BaseAddresses::default();
             let mut ctx = gimli::UninitializedUnwindContext::new();
-            let pc = *frameregs.get(&ARMRegister::PC).unwrap();
+            let pc =
+                *frameregs.get(&self.arch.as_ref().unwrap().get_pc()).unwrap();
 
             //
             // Now we want to iterate up our frames
@@ -2903,7 +2852,12 @@ impl HubrisArchive {
             //
             let cfa = match unwind_info.cfa() {
                 gimli::CfaRule::RegisterAndOffset { register, offset } => {
-                    if let Some(reg) = ARMRegister::from_u16(register.0) {
+                    if let Ok(reg) = self
+                        .arch
+                        .as_ref()
+                        .unwrap()
+                        .register_from_dwarf_id(register.0.into())
+                    {
                         *frameregs.get(&reg).unwrap() + *offset as u32
                     } else {
                         // A register we don't model -- that's OK.
@@ -2935,7 +2889,12 @@ impl HubrisArchive {
                     }
                 };
 
-                if let Some(reg) = ARMRegister::from_u16(register.0) {
+                if let Ok(reg) = self
+                    .arch
+                    .as_ref()
+                    .unwrap()
+                    .register_from_id(register.0.into())
+                {
                     frameregs.insert(reg, val);
                 } else {
                     // Skip register we don't model.
@@ -2943,7 +2902,7 @@ impl HubrisArchive {
                 }
             }
 
-            frameregs.insert(ARMRegister::SP, cfa);
+            frameregs.insert(self.arch.as_ref().unwrap().get_sp(), cfa);
 
             //
             // Lookup the DWARF symbol associated with our PC
@@ -2975,22 +2934,25 @@ impl HubrisArchive {
                 registers: frameregs.clone(),
             });
 
-            let lr = *frameregs.get(&ARMRegister::LR).unwrap();
+            let ret_reg = *frameregs
+                .get(&self.arch.as_ref().unwrap().get_ret_reg())
+                .unwrap();
 
             //
             // If this is a kernel stack and we have hit an EXC_RETURN, we're
             // done.
-            //
-            if task == HubrisTask::Kernel && (lr >> 28 == 0xf) {
+            // TODO: riscv needs some other way to identify if we were in kernel stack
+            if task == HubrisTask::Kernel && (ret_reg >> 28 == 0xf) {
                 break;
             }
 
             //
             // Make sure that the low (Thumb) bit is clear
             //
-            let lr = lr & !1;
+            let ret_reg =
+                self.arch.as_ref().unwrap().extract_fn_pointer(ret_reg);
 
-            frameregs.insert(ARMRegister::PC, lr);
+            frameregs.insert(self.arch.as_ref().unwrap().get_pc(), ret_reg);
 
             if cfa >= limit {
                 break;
@@ -3243,10 +3205,12 @@ impl HubrisArchive {
             }
 
             None => {
-                for i in 0..31 {
-                    if let Some(reg) = ARMRegister::from_u16(i) {
-                        let val = core.read_reg(reg)?;
-                        regs.push((i, val));
+                for reg in self.arch.as_ref().unwrap().get_all_registers() {
+                    let val = core.read_reg(reg);
+                    if let Err(_err) = val {
+                        log::trace!("skipping register: {}", reg);
+                    } else {
+                        regs.push((reg.to_u32().unwrap(), val.unwrap()));
                     }
                 }
 
@@ -3265,7 +3229,9 @@ impl HubrisArchive {
         });
 
         let mut header = goblin::elf::header::Header::new(ctx);
-        header.e_machine = goblin::elf::header::EM_ARM;
+        header.e_machine = self.arch.as_ref().unwrap().get_e_machine();
+        header.e_ident[goblin::elf::header::EI_CLASS] =
+            self.arch.as_ref().unwrap().get_ei_class();
         header.e_type = goblin::elf::header::ET_CORE;
         header.e_phoff = header.e_ehsize as u64;
         header.e_phnum = (notes.len() + nsegs) as u16;
@@ -3651,7 +3617,7 @@ impl HubrisArchive {
 
     pub fn unhalted_reads(&self) -> bool {
         if let Some(ref target) = self.manifest.target {
-            target != "thumbv6m-none-eabi"
+            !(target == "thumbv6m-none-eabi" || target.contains("riscv"))
         } else {
             false
         }
@@ -3717,6 +3683,8 @@ impl HubrisArchive {
 struct HubrisObjectLoader {
     current: u32,
 
+    arch: Option<Box<dyn Arch>>,
+
     // image ID
     imageid: Option<(u32, Vec<u8>)>,
 
@@ -3743,10 +3711,10 @@ struct HubrisObjectLoader {
 
     // Instructions: address to bytes/target tuple. The target will be None if
     // the instruction did not decode as some kind of jump/branch/call.
-    instrs: HashMap<u32, (Vec<u8>, Option<HubrisTarget>)>,
+    instrs: HashMap<u32, (Vec<u8>, Option<InstrTarget>)>,
 
     // Manual stack pushes before a syscall
-    syscall_pushes: HashMap<u32, Option<Vec<ARMRegister>>>,
+    syscall_pushes: HashMap<u32, Option<Vec<Register>>>,
 
     // Unions: goff to union
     unions: HashMap<HubrisGoff, HubrisUnion>,
@@ -3807,6 +3775,7 @@ impl HubrisObjectLoader {
     fn new(current: u32) -> Result<Self> {
         Ok(Self {
             current,
+            arch: None,
             apptable: None,
             imageid: None,
             arrays: HashMap::new(),
@@ -3843,20 +3812,6 @@ impl HubrisObjectLoader {
         task: HubrisTask,
         buffer: &[u8],
     ) -> Result<()> {
-        //
-        // Initialize Capstone, being sure to specify not only our
-        // architecture but also that we are disassembling Thumb-2 --
-        // and (importantly) to allow M-profile instructions.
-        //
-        let mut cs = Capstone::new()
-            .arm()
-            .mode(arch::arm::ArchMode::Thumb)
-            .extra_mode(std::iter::once(arch::arm::ArchExtraMode::MClass))
-            .detail(true)
-            .build()
-            .map_err(|e| anyhow!("failed to initialize disassembler: {e:?}"))?;
-        cs.set_skipdata(true).expect("failed to set skipdata");
-
         use goblin::elf::section_header;
 
         let mut heapbss = (None, None);
@@ -3866,11 +3821,14 @@ impl HubrisObjectLoader {
             anyhow!("unrecognized ELF object: {}: {}", object, e)
         })?;
 
-        let arm = elf.header.e_machine == goblin::elf::header::EM_ARM;
+        // Load target architecture from elf, will be used for dissassembly
+        // Determine 32bit vs 64bit
+        // This will consume the box, and leave an owned dyn Arch object
+        self.arch = Some(get_arch(elf.header.e_machine));
 
-        if !arm {
-            bail!("{} not an ARM ELF object", object);
-        }
+        //Instantiate an appropriate capstone for the architecture
+        let mut cs = self.arch.as_ref().unwrap().make_capstone().unwrap();
+        cs.set_skipdata(true).expect("failed to set skipdata");
 
         let text = elf.section_headers.iter().find(|sh| {
             if let Some(Ok(name)) = elf.shdr_strtab.get(sh.sh_name) {
@@ -3955,10 +3913,11 @@ impl HubrisObjectLoader {
             // Thumb instructions (which is of course every function on a
             // microprocessor that executes only Thumb instructions).
             //
-            assert!(arm);
-
             let val = if sym.is_function() {
-                sym.st_value as u32 & !1
+                self.arch
+                    .as_ref()
+                    .unwrap()
+                    .extract_fn_pointer(sym.st_value as u32)
             } else {
                 sym.st_value as u32
             };
@@ -4139,10 +4098,12 @@ impl HubrisObjectLoader {
 
             last = (addr, b.len());
 
-            let target = self.instr_branch_target(cs, instr);
+            let target =
+                self.arch.as_ref().unwrap().instr_branch_target(cs, instr);
             self.instrs.insert(addr, (b.to_vec(), target));
 
-            const ARM_INSN_SVC: u32 = arch::arm::ArmInsn::ARM_INS_SVC as u32;
+            // Use appropriate syscall for the platform
+            let syscall_instr = self.arch.as_ref().unwrap().get_syscall_insn();
 
             //
             // If we encounter a syscall instruction, we need to analyze
@@ -4150,13 +4111,16 @@ impl HubrisObjectLoader {
             // before any system call in order to be able to successfully
             // unwind the stack.
             //
-            if let InsnId(ARM_INSN_SVC) = instr.id() {
-                if task != HubrisTask::Kernel {
-                    self.syscall_pushes.insert(
-                        addr + b.len() as u32,
-                        Some(presyscall_pushes(cs, &instrs[0..ndx])?),
-                    );
-                }
+            if InsnId(syscall_instr) == instr.id() && task != HubrisTask::Kernel
+            {
+                self.syscall_pushes.insert(
+                    addr + b.len() as u32,
+                    self.arch
+                        .as_ref()
+                        .unwrap()
+                        .presyscall_pushes(cs, &instrs[0..ndx])
+                        .ok(),
+                );
             }
         }
 
@@ -4167,8 +4131,9 @@ impl HubrisObjectLoader {
         //
         if last.0 + last.1 as u32 != addr + buffer.len() as u32 {
             bail!(
-                "short disassembly for {}: \
+                "short disassembly for {} in {}: \
                 stopped at 0x{:x}, expected to go to 0x{:x}",
+                func,
                 object,
                 last.0,
                 addr + buffer.len() as u32
@@ -4451,103 +4416,6 @@ impl HubrisObjectLoader {
         } else {
             Ok(None)
         }
-    }
-
-    fn instr_branch_target(
-        &self,
-        cs: &Capstone,
-        instr: &capstone::Insn,
-    ) -> Option<HubrisTarget> {
-        let detail = cs.insn_detail(instr).ok()?;
-
-        let mut jump = false;
-        let mut call = false;
-        let mut brel = None;
-
-        const BREL: u8 = InsnGroupType::CS_GRP_BRANCH_RELATIVE as u8;
-        const JUMP: u8 = InsnGroupType::CS_GRP_JUMP as u8;
-        const CALL: u8 = InsnGroupType::CS_GRP_CALL as u8;
-        const ARM_REG_PC: u16 = arch::arm::ArmReg::ARM_REG_PC as u16;
-        const ARM_REG_LR: u16 = arch::arm::ArmReg::ARM_REG_LR as u16;
-        const ARM_INSN_POP: u32 = arch::arm::ArmInsn::ARM_INS_POP as u32;
-
-        for g in detail.groups() {
-            match g {
-                InsnGroupId(BREL) => {
-                    let arch = detail.arch_detail();
-                    let ops = arch.operands();
-
-                    let op = ops.last().unwrap_or_else(|| {
-                        panic!("missing operand!");
-                    });
-
-                    if let arch::ArchOperand::ArmOperand(op) = op {
-                        if let arch::arm::ArmOperandType::Imm(a) = op.op_type {
-                            brel = Some(a as u32);
-                        }
-                    }
-                }
-
-                InsnGroupId(JUMP) => {
-                    jump = true;
-                }
-
-                InsnGroupId(CALL) => {
-                    call = true;
-                }
-                _ => {}
-            }
-        }
-
-        if let Some(addr) = brel {
-            if call {
-                return Some(HubrisTarget::Call(addr));
-            } else {
-                return Some(HubrisTarget::Direct(addr));
-            }
-        }
-
-        if call {
-            return Some(HubrisTarget::IndirectCall);
-        }
-
-        //
-        // If this is a JUMP that isn't a CALL, check to see if one of
-        // its operands is LR -- in which case it's a return (or could be
-        // a return).
-        //
-        if jump {
-            for op in detail.arch_detail().operands() {
-                if let arch::ArchOperand::ArmOperand(op) = op {
-                    if let arch::arm::ArmOperandType::Reg(RegId(ARM_REG_LR)) =
-                        op.op_type
-                    {
-                        return Some(HubrisTarget::Return);
-                    }
-                }
-            }
-
-            return Some(HubrisTarget::Indirect);
-        }
-
-        //
-        // Capstone doesn't have a group denoting returns (they are control
-        // transfers, but not considered in the JUMP group), so explicitly
-        // look for a pop instruction that writes to the PC.
-        //
-        if let InsnId(ARM_INSN_POP) = instr.id() {
-            for op in detail.arch_detail().operands() {
-                if let arch::ArchOperand::ArmOperand(op) = op {
-                    if let arch::arm::ArmOperandType::Reg(RegId(ARM_REG_PC)) =
-                        op.op_type
-                    {
-                        return Some(HubrisTarget::Return);
-                    }
-                }
-            }
-        }
-
-        None
     }
 
     fn dwarf_goff<R: gimli::Reader<Offset = usize>>(
@@ -6320,20 +6188,11 @@ impl<'a> std::fmt::Display for HubrisType<'a> {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub enum HubrisTarget {
-    Direct(u32),
-    Indirect,
-    Call(u32),
-    IndirectCall,
-    Return,
-}
-
 #[derive(Clone, Debug)]
 pub struct HubrisStackFrame<'a> {
     pub cfa: u32,
     pub sym: Option<&'a HubrisSymbol>,
-    pub registers: BTreeMap<ARMRegister, u32>,
+    pub registers: BTreeMap<Register, u32>,
     pub inlined: Option<Vec<HubrisInlined<'a>>>,
 }
 

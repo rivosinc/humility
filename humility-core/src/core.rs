@@ -8,7 +8,8 @@ use probe_rs::{flashing, Probe};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 
 use crate::hubris::*;
-use humility_arch_arm::ARMRegister;
+use humility_arch_reg::Register;
+use num_traits::ToPrimitive;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -35,8 +36,8 @@ pub trait Core {
     }
 
     fn read_8(&mut self, addr: u32, data: &mut [u8]) -> Result<()>;
-    fn read_reg(&mut self, reg: ARMRegister) -> Result<u32>;
-    fn write_reg(&mut self, reg: ARMRegister, value: u32) -> Result<()>;
+    fn read_reg(&mut self, reg: Register) -> Result<u32>;
+    fn write_reg(&mut self, reg: Register, value: u32) -> Result<()>;
     fn init_swv(&mut self) -> Result<()>;
     fn read_swv(&mut self) -> Result<Vec<u8>>;
     fn write_word_32(&mut self, addr: u32, data: u32) -> Result<()>;
@@ -151,11 +152,11 @@ impl Core for UnattachedCore {
         bail!("Core::read_8 unimplemented when unattached!");
     }
 
-    fn read_reg(&mut self, _reg: ARMRegister) -> Result<u32> {
+    fn read_reg(&mut self, _reg: Register) -> Result<u32> {
         bail!("Core::read_reg unimplemented when unattached!");
     }
 
-    fn write_reg(&mut self, _reg: ARMRegister, _value: u32) -> Result<()> {
+    fn write_reg(&mut self, _reg: Register, _value: u32) -> Result<()> {
         bail!("Core::write_reg unimplemented when unattached!");
     }
 
@@ -243,7 +244,7 @@ impl ProbeCore {
             serial_number,
             unhalted_reads,
             halted: 0,
-            unhalted_read: humility_arch_arm::unhalted_read_regions(),
+            unhalted_read: humility_arch::arm::unhalted_read_regions(),
             can_flash,
         }
     }
@@ -351,23 +352,25 @@ impl Core for ProbeCore {
         })
     }
 
-    fn read_reg(&mut self, reg: ARMRegister) -> Result<u32> {
+    fn read_reg(&mut self, reg: Register) -> Result<u32> {
         let mut core = self.session.core(0)?;
+        let reg_id = Register::to_u16(&reg).unwrap();
+
         use num_traits::ToPrimitive;
 
         Ok(core.read_core_reg(Into::<probe_rs::CoreRegisterAddress>::into(
-            ARMRegister::to_u16(&reg).unwrap(),
+            reg_id,
         ))?)
     }
 
-    fn write_reg(&mut self, reg: ARMRegister, value: u32) -> Result<()> {
+    fn write_reg(&mut self, reg: Register, value: u32) -> Result<()> {
         let mut core = self.session.core(0)?;
+        let reg_id = Register::to_u16(&reg).unwrap();
+
         use num_traits::ToPrimitive;
 
         core.write_core_reg(
-            Into::<probe_rs::CoreRegisterAddress>::into(
-                ARMRegister::to_u16(&reg).unwrap(),
-            ),
+            Into::<probe_rs::CoreRegisterAddress>::into(reg_id),
             value,
         )?;
 
@@ -702,18 +705,22 @@ impl Core for OpenOCDCore {
         Ok(())
     }
 
-    fn write_reg(&mut self, _reg: ARMRegister, _val: u32) -> Result<()> {
+    fn write_reg(&mut self, _reg: Register, _val: u32) -> Result<()> {
         // This does not work right now, TODO?
+        // openocd does support reading though
         //
         Err(anyhow!(
             "Writing registers is not currently supported with OpenOCD"
         ))
     }
 
-    fn read_reg(&mut self, reg: ARMRegister) -> Result<u32> {
+    fn read_reg(&mut self, reg: Register) -> Result<u32> {
+        let reg_id = Register::to_u16(&reg).unwrap();
+
+        self.op_start()?;
         use num_traits::ToPrimitive;
 
-        let cmd = format!("reg {}", ARMRegister::to_u16(&reg).unwrap());
+        let cmd = format!("reg {}", reg_id);
         let rval = self.sendcmd(&cmd)?;
 
         if let Some(line) = rval.lines().next() {
@@ -1114,9 +1121,8 @@ impl Core for GDBCore {
         Ok(())
     }
 
-    fn read_reg(&mut self, reg: ARMRegister) -> Result<u32> {
-        use num_traits::ToPrimitive;
-        let cmd = &format!("p{:02X}", ARMRegister::to_u16(&reg).unwrap());
+    fn read_reg(&mut self, reg: Register) -> Result<u32> {
+        let cmd = &format!("p{:02X}", Register::to_u16(&reg).unwrap());
 
         let rval = self.send_32(cmd);
 
@@ -1131,7 +1137,7 @@ impl Core for GDBCore {
         rval
     }
 
-    fn write_reg(&mut self, _reg: ARMRegister, _value: u32) -> Result<()> {
+    fn write_reg(&mut self, _reg: Register, _value: u32) -> Result<()> {
         Err(anyhow!(
             "{} GDB target does not support modifying state", self.server
         ))
@@ -1207,7 +1213,7 @@ impl Core for GDBCore {
 pub struct DumpCore {
     contents: Vec<u8>,
     regions: BTreeMap<u32, (u32, usize)>,
-    registers: HashMap<ARMRegister, u32>,
+    registers: HashMap<Register, u32>,
 }
 
 impl DumpCore {
@@ -1306,7 +1312,7 @@ impl Core for DumpCore {
         bail!("read of {} bytes from invalid address: 0x{:x}", rsize, addr);
     }
 
-    fn read_reg(&mut self, reg: ARMRegister) -> Result<u32> {
+    fn read_reg(&mut self, reg: Register) -> Result<u32> {
         if let Some(val) = self.registers.get(&reg) {
             Ok(*val)
         } else {
@@ -1314,7 +1320,7 @@ impl Core for DumpCore {
         }
     }
 
-    fn write_reg(&mut self, _reg: ARMRegister, _value: u32) -> Result<()> {
+    fn write_reg(&mut self, _reg: Register, _value: u32) -> Result<()> {
         bail!("cannot write register on a dump");
     }
 
@@ -1400,11 +1406,11 @@ impl Core for ArchiveCore {
         self.read(addr, data)
     }
 
-    fn read_reg(&mut self, reg: ARMRegister) -> Result<u32> {
+    fn read_reg(&mut self, reg: Register) -> Result<u32> {
         bail!("cannot read register {} from an archive", reg);
     }
 
-    fn write_reg(&mut self, reg: ARMRegister, _value: u32) -> Result<()> {
+    fn write_reg(&mut self, reg: Register, _value: u32) -> Result<()> {
         bail!("cannot write register {} to an archive", reg);
     }
 
@@ -1606,7 +1612,12 @@ pub fn attach_to_chip(
             //
             let (session, can_flash) = match chip {
                 Some(chip) => (probe.attach(chip)?, true),
-                None => (probe.attach("armv7m")?, false),
+                None => (
+                    probe.attach(
+                        hubris.arch.as_ref().unwrap().get_generic_chip(),
+                    )?,
+                    false,
+                ),
             };
 
             crate::msg!("attached via {name}");
@@ -1678,7 +1689,12 @@ pub fn attach_to_chip(
                 //
                 let (session, can_flash) = match chip {
                     Some(chip) => (probe.attach(chip)?, true),
-                    None => (probe.attach("armv7m")?, false),
+                    None => (
+                        probe.attach(
+                            hubris.arch.as_ref().unwrap().get_generic_chip(),
+                        )?,
+                        false,
+                    ),
                 };
 
                 crate::msg!("attached to {vidpid} via {name}");

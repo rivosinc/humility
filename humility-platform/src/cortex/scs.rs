@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::debug::*;
+use crate::cortex::debug::*;
 use crate::register;
 use crate::register_offs;
 use anyhow::{bail, Result};
@@ -470,7 +470,7 @@ impl CoreInfo {
             let ctrl = LPC55_SYSCON_AHBCLKCTRL0::read(core)?;
 
             if !ctrl.iocon() {
-                warn!("IOCON is not clocked");
+                log::warn!("IOCON is not clocked");
             }
         }
 

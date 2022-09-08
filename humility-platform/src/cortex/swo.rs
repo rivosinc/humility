@@ -6,6 +6,7 @@ use anyhow::Result;
 
 use crate::register_offs;
 use humility::core::Core;
+use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 use num_traits::ToPrimitive;
 

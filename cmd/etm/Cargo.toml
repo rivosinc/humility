@@ -6,7 +6,8 @@ description = "commands for ARM's Embedded Trace Macrocell (ETM)"
 
 [dependencies]
 humility = { workspace = true }
-humility-cortex = { workspace = true }
+humility-arch = { workspace = true }
+humility-platform = { workspace = true }
 humility-cmd = { workspace = true }
 humility-cli = { workspace = true }
 clap = { workspace = true }

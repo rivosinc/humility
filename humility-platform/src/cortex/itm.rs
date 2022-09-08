@@ -2,12 +2,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::debug::*;
-use crate::dwt::*;
+use crate::cortex::debug::*;
+use crate::cortex::dwt::*;
+use crate::cortex::scs::*;
+use crate::cortex::swo::*;
+use crate::cortex::tpiu::*;
 use crate::register;
-use crate::scs::*;
-use crate::swo::*;
-use crate::tpiu::*;
 use anyhow::Result;
 use bitfield::bitfield;
 use humility::core::Core;

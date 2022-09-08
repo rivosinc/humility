@@ -132,11 +132,10 @@
 use anyhow::{bail, Result};
 use clap::{CommandFactory, Parser};
 use humility::hubris::*;
-use humility_arch_arm::{ARMRegister, ARMRegisterField};
+use humility_arch_reg::{Register, RegisterField};
 use humility_cli::{ExecutionContext, Subcommand};
 use humility_cmd::{Archive, Attach, Command, CommandKind, Validate};
-use humility_cortex::debug::*;
-use num_traits::FromPrimitive;
+use humility_platform::cortex::debug::*;
 use std::collections::BTreeMap;
 
 #[derive(Parser, Debug)]
@@ -155,7 +154,7 @@ struct RegistersArgs {
     fp: bool,
 }
 
-fn print_reg(reg: ARMRegister, val: u32, fields: &[ARMRegisterField]) {
+fn print_reg(reg: Register, val: u32, fields: &[RegisterField]) {
     print!("{:>5} = 0x{:08x} <- ", reg, val);
     let indent = 5 + "= 0x00000000 <- ".len();
 
@@ -169,7 +168,7 @@ fn print_reg(reg: ARMRegister, val: u32, fields: &[ARMRegisterField]) {
         }
     }
 
-    fn print_bars(f: &[ARMRegisterField], elbow: bool) {
+    fn print_bars(f: &[RegisterField], elbow: bool) {
         let mut pos = 32;
 
         for i in 0..f.len() {
@@ -268,14 +267,9 @@ fn registers(context: &mut ExecutionContext) -> Result<()> {
     //
     // Read all of our registers first...
     //
-    for i in 0..=ARMRegister::max() {
-        let reg = match ARMRegister::from_u16(i) {
-            Some(r) => r,
-            None => {
-                continue;
-            }
-        };
-
+    let reg_iter: Vec<Register> =
+        hubris.arch.as_ref().unwrap().get_all_registers();
+    for reg in reg_iter {
         if reg.is_floating_point() && !subargs.fp {
             continue;
         }
@@ -318,7 +312,7 @@ fn registers(context: &mut ExecutionContext) -> Result<()> {
             }
         );
 
-        if subargs.stack && *reg == ARMRegister::SP {
+        if subargs.stack && *reg == hubris.arch.as_ref().unwrap().get_sp() {
             if let Some((_, region)) = regions.range(..=val).next_back() {
                 let task = if region.tasks.len() == 1 {
                     region.tasks[0]
