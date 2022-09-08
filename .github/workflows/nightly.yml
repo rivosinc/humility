@@ -30,6 +30,6 @@ jobs:
           args: --release
 
       - name: Upload Release
-        run: gh release upload --repo oxidecomputer/humility nightly --clobber target/release/humility
+        run: gh release upload --repo rivosinc/humility nightly --clobber target/release/humility
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
