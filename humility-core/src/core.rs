@@ -483,6 +483,8 @@ pub struct OpenOCDCore {
     stream: TcpStream,
     swv: bool,
     last_swv: Option<Instant>,
+    halted: bool,
+    was_halted: bool,
 }
 
 #[rustfmt::skip::macros(anyhow, bail)]
@@ -529,8 +531,32 @@ impl OpenOCDCore {
             TcpStream::connect_timeout(&addr, timeout).map_err(|_| {
                 anyhow!("can't connect to OpenOCD on port 6666; is it running?")
             })?;
-
-        Ok(Self { stream, swv: false, last_swv: None })
+        let mut core = Self {
+            stream,
+            swv: false,
+            last_swv: None,
+            halted: false,
+            was_halted: false,
+        };
+        // determine if the core is initially halted
+        let _target = core.sendcmd("set targ [target current]")?;
+        core.halted = match core.sendcmd("$targ curstate")?.as_str() {
+            "halted" => {
+                log::trace!("connected to halted core");
+                true
+            }
+            "running" => {
+                log::trace!("connected to running core");
+                false
+            }
+            _ => {
+                crate::msg!("Target in unknown state, humility will leave the core in a running state");
+                false
+            }
+        };
+        // if core was initially halted, we want to leave in a halted state after any operation
+        core.was_halted = core.halted;
+        Ok(core)
     }
 }
 
@@ -541,7 +567,9 @@ impl Core for OpenOCDCore {
     }
 
     fn read_word_32(&mut self, addr: u32) -> Result<u32> {
+        self.op_start()?;
         let result = self.sendcmd(&format!("mrw 0x{:x}", addr))?;
+        self.op_done()?;
         Ok(result.parse::<u32>()?)
     }
 
@@ -553,6 +581,7 @@ impl Core for OpenOCDCore {
             addr,
             CORE_MAX_READSIZE
         );
+        self.op_start()?;
 
         //
         // To read an array, we put it in a TCL variable called "output"
@@ -613,6 +642,7 @@ impl Core for OpenOCDCore {
         for v in seen.iter().enumerate() {
             ensure!(v.1, "\"{}\": missing index {}", cmd, v.0);
         }
+        self.op_done()?;
 
         Ok(())
     }
@@ -646,6 +676,7 @@ impl Core for OpenOCDCore {
                 }
             }
         }
+        self.op_done()?;
 
         Err(anyhow!("\"{}\": malformed return value: {:?}", cmd, rval))
     }
@@ -728,7 +759,9 @@ impl Core for OpenOCDCore {
     }
 
     fn write_word_32(&mut self, addr: u32, data: u32) -> Result<()> {
+        self.op_start()?;
         self.sendcmd(&format!("mww 0x{:x} 0x{:x}", addr, data))?;
+        self.op_done()?;
         Ok(())
     }
 
@@ -737,18 +770,26 @@ impl Core for OpenOCDCore {
     }
 
     fn halt(&mut self) -> Result<()> {
+        log::trace!("halting core");
         //
         // On OpenOCD, we don't halt. If GDB is connected, it gets really,
         // really confused!  This should probably be configurable at
         // some point...
         //
+        // Well without unhalted read support cant do anything,
+        // so we will pass the onus to the user for now
+        self.sendcmd("halt")?;
+        self.halted = true;
         Ok(())
     }
 
     fn run(&mut self) -> Result<()> {
+        log::trace!("running core");
         //
         // Well, see above.
         //
+        self.sendcmd("resume")?;
+        self.halted = false;
         Ok(())
     }
 
@@ -756,12 +797,34 @@ impl Core for OpenOCDCore {
         todo!();
     }
 
-    fn load(&mut self, _path: &Path) -> Result<()> {
-        bail!("Flash loading is not supported with OpenOCD");
+    fn load(&mut self, path: &Path) -> Result<()> {
+        self.sendcmd("reset init")?;
+        self.sendcmd(&format!("load_image {} 0x0", path.display()))?;
+        self.sendcmd(&format!("verify_image {} 0x0", path.display()))?;
+        self.sendcmd("echo \"Doing reset\"")?;
+        self.sendcmd("reset run")?;
+        Ok(())
     }
 
     fn reset(&mut self) -> Result<()> {
-        bail!("Reset is not supported with OpenOCD");
+        self.sendcmd("reset run")?;
+        Ok(())
+    }
+
+    fn op_start(&mut self) -> Result<()> {
+        log::trace!("op_start: halting core");
+        self.halt()
+    }
+
+    fn op_done(&mut self) -> Result<()> {
+        log::trace!("was halted: {}", self.was_halted);
+        if !self.was_halted {
+            log::trace!("op_done: resuming core");
+            self.run()?;
+        } else {
+            log::trace!("op_done: leaving core halted");
+        }
+        Ok(())
     }
 }
 
