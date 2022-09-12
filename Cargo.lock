@@ -997,7 +997,7 @@ dependencies = [
  "parse_int",
  "probe-rs",
  "strum 0.22.0",
- "strum_macros",
+ "strum_macros 0.22.0",
  "zerocopy",
 ]
 
@@ -1194,7 +1194,7 @@ dependencies = [
  "parse_int",
  "serialport",
  "strum 0.22.0",
- "strum_macros",
+ "strum_macros 0.22.0",
  "zerocopy",
 ]
 
