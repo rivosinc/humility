@@ -832,6 +832,7 @@ impl Core for OpenOCDCore {
 enum GDBServer {
     OpenOCD,
     JLink,
+    Qemu,
 }
 
 impl fmt::Display for GDBServer {
@@ -842,6 +843,7 @@ impl fmt::Display for GDBServer {
             match self {
                 GDBServer::OpenOCD => "OpenOCD",
                 GDBServer::JLink => "JLink",
+                GDBServer::Qemu => "QEMU",
             }
         )
     }
@@ -851,12 +853,12 @@ pub struct GDBCore {
     stream: TcpStream,
     server: GDBServer,
     halted: bool,
+    was_halted: bool,
 }
 
 const GDB_PACKET_START: char = '$';
 const GDB_PACKET_END: char = '#';
 const GDB_PACKET_ACK: char = '+';
-const GDB_PACKET_HALT: u8 = 3;
 
 #[rustfmt::skip::macros(anyhow, bail)]
 impl GDBCore {
@@ -884,40 +886,41 @@ impl GDBCore {
     }
 
     fn firecmd(&mut self, cmd: &str) -> Result<()> {
-        let mut rbuf = vec![0; 1024];
+        log::trace!("sending: {}", cmd);
         let payload = self.prepcmd(cmd);
-
         self.stream.write_all(&payload)?;
+        log::trace!("sent");
+        Ok(())
+    }
 
-        //
-        // We are expecting no result -- just an ack.
-        //
+    // GDB support is still WIP, so may need later
+    #[allow(unused)]
+    fn recvack(&mut self) -> Result<()> {
+        let mut rbuf = vec![0; 1024];
+
         let rval = self.stream.read(&mut rbuf)?;
-
         if rval != 1 {
-            bail!("cmd {} returned {} bytes: {:?}", cmd, rval,
-                str::from_utf8(&rbuf));
+            //TODO sometimes get halt packet instead, probably need a way to properly handle
+            log::trace!("expected ack, but got: {:?}", rbuf);
         }
-
-        if rbuf[0] != GDB_PACKET_ACK as u8 {
-            bail!("cmd {} incorrectly ack'd: {:?}", cmd, rbuf);
-        }
-
+        log::trace!("received ack");
         Ok(())
     }
 
     fn sendack(&mut self) -> Result<()> {
         self.stream.write_all(&[GDB_PACKET_ACK as u8])?;
+        log::trace!("sending ack");
         Ok(())
     }
 
-    fn recv(&mut self, expectack: bool) -> Result<String> {
+    fn recvdata(&mut self) -> Result<String> {
         let mut rbuf = vec![0; 1024];
         let mut result = String::new();
 
         loop {
+            log::trace!("reading first chunk");
             let rval = self.stream.read(&mut rbuf)?;
-
+            log::trace!("received {} bytes", rval);
             result.push_str(str::from_utf8(&rbuf[0..rval])?);
             log::trace!("response: {}", result);
 
@@ -925,15 +928,16 @@ impl GDBCore {
             // We are done when we have our closing delimter followed by
             // the two byte checksum.
             //
+            let end_yet = result.find(GDB_PACKET_END);
+            if end_yet.is_none() {
+                log::trace!("reading more data");
+                continue;
+            }
             if result.find(GDB_PACKET_END) == Some(result.len() - 3) {
                 break;
             }
+            log::trace!("reading more data");
         }
-
-        //
-        // We have our response, so ack it back
-        //
-        self.sendack()?;
 
         //
         // In our result, we should have exactly one opening and exactly
@@ -956,70 +960,38 @@ impl GDBCore {
             bail!("start/end inverted: \"{}\"", result);
         }
 
-        match result.find(GDB_PACKET_ACK) {
-            Some(ack) => {
-                if expectack && ack > start {
-                    bail!("found response but no ack: \"{}\"", result);
-                }
-
-                if !expectack && ack < start {
-                    bail!("found spurious ack: \"{}\"", result);
-                }
-            }
-
-            None => {
-                if expectack {
-                    bail!("did not find expected ack: \"{}\"", result);
-                }
-            }
-        }
-
         Ok(result[start + 1..end].to_string())
     }
 
     fn sendcmd(&mut self, cmd: &str) -> Result<String> {
-        let payload = self.prepcmd(cmd);
-        self.stream.write_all(&payload)?;
-        self.recv(true)
+        let just_halted = false;
+        self.firecmd(cmd)?;
+        //TODO spec says you should send an ack, but only seems to cause problems
+        //self.recvack()?;
+
+        let mut data = self.recvdata()?;
+        // if core halted
+        if data.contains("T02thread:01;") {
+            self.halted = true;
+            self.sendack()?;
+            log::trace!("halted: trying again");
+            self.firecmd(cmd)?;
+            data = self.recvdata()?;
+        }
+        self.sendack()?;
+        if just_halted {
+            self.firecmd("c")?;
+            self.halted = false;
+        }
+        Ok(data)
     }
 
-    fn send_32(&mut self, cmd: &str) -> Result<u32> {
-        let rstr = self.sendcmd(cmd)?;
-        let mut buf: Vec<u8> = vec![];
-
-        for i in (0..rstr.len()).step_by(2) {
-            buf.push(u8::from_str_radix(&rstr[i..=i + 1], 16)?);
-        }
-
-        log::trace!("command {} returned {}", cmd, rstr);
-
-        match rstr.len() {
-            2 => Ok(u8::from_le_bytes(buf[..].try_into().unwrap()) as u32),
-            4 => Ok(u16::from_le_bytes(buf[..].try_into().unwrap()) as u32),
-            8 => Ok(u32::from_le_bytes(buf[..].try_into().unwrap()) as u32),
-            16 => {
-                //
-                // Amazingly, for some 32-bit register values under certain
-                // circumstances the JLink seems to return a 64-bit value
-                // (!). We confirm that this value is
-                // representable and return it.
-                //
-                let val = u64::from_le_bytes(buf[..].try_into().unwrap());
-
-                if val > std::u32::MAX.into() {
-                    Err(anyhow!("bad 64-bit return on cmd {}: {}", cmd, rstr))
-                } else {
-                    Ok(val as u32)
-                }
-            }
-            _ => Err(anyhow!("bad return on cmd {}: {}", cmd, rstr)),
-        }
-    }
-
+    //TODO Should keep track if the target was initially halted or not, and leave in that state
     fn new(server: GDBServer) -> Result<GDBCore> {
         let port = match server {
             GDBServer::OpenOCD => 3333,
             GDBServer::JLink => 2331,
+            GDBServer::Qemu => 3333,
         };
 
         let host = format!("127.0.0.1:{}", port);
@@ -1035,18 +1007,43 @@ impl GDBCore {
             )
             })?;
 
+        // set read timout to avoid blocking when waiting for a response that never comes.  This
+        // allows an explicit error
+        stream.set_read_timeout(Some(Duration::from_millis(1000)))?;
+        stream.set_write_timeout(Some(Duration::from_millis(1000)))?;
+
         //
         // Both the OpenOCD and JLink GDB servers stop the target upon
         // connection.  This is helpful in that we know the state that
         // we're in -- but it's also not the state that we want to be
         // in.  We explicitly run the target before returning.
         //
-        let mut core = Self { stream, server, halted: true };
+        let mut core = Self { stream, server, halted: true, was_halted: true };
 
-        let supported = core.sendcmd("qSupported")?;
-        log::trace!("{} supported string: {}", server, supported);
+        let data = core.recvdata();
+        match data {
+            Err(_err) => {
+                log::trace!("connected to halted core");
+                core.was_halted = true;
+            }
+            Ok(data) => {
+                // When gdb halts the core, it sends this packet back.
+                // [Here](https://sourceware.org/gdb/onlinedocs/gdb/Stop-Reply-Packets.html#Stop-Reply-Packets) is the reference for decoding.
+                // It is decoded to mean that thread 1 halted.
+                // It is used here to determine if the core was halted when humility connected, as any connection to the gdb server halts the core.
+                // If the core was already halted, this packet will not be received.
+                if !data.contains("T02thread:01") {
+                    bail!("Target did not halt on connect");
+                }
+                log::trace!("connected to running core");
+                core.was_halted = false;
+                core.run()?;
+            }
+        };
 
-        core.run()?;
+        //TODO may need to call qSupported to enable register reads, according to https://github.com/qemu/qemu/blob/master/gdbstub.c#L1722
+        //let supported = core.sendcmd("qSupported")?;
+        //log::trace!("{} supported string: {}", server, supported);
 
         Ok(core)
     }
@@ -1059,7 +1056,9 @@ impl Core for GDBCore {
     }
 
     fn read_word_32(&mut self, addr: u32) -> Result<u32> {
-        self.send_32(&format!("m{:x},4", addr))
+        let mut data = [0; 4];
+        self.read_8(addr, &mut data)?;
+        Ok(u32::from_le_bytes(data))
     }
 
     fn read_8(&mut self, addr: u32, data: &mut [u8]) -> Result<()> {
@@ -1084,17 +1083,11 @@ impl Core for GDBCore {
         let reg_id = Register::to_u16(&reg).unwrap();
         use num_traits::ToPrimitive;
 
-        let rval = self.send_32(cmd);
+        let cmd = &format!("p{:02X}", reg_id);
 
-        if self.server == GDBServer::JLink {
-            //
-            // Maddeningly, the JLink stops the target whenever a register
-            // is read.
-            //
-            self.firecmd("c")?;
-        }
+        let rstr = self.sendcmd(cmd)?;
 
-        rval
+        Ok(u32::from_str_radix(&rstr, 16)?)
     }
 
     fn write_reg(&mut self, _reg: Register, _value: u32) -> Result<()> {
@@ -1116,12 +1109,14 @@ impl Core for GDBCore {
     }
 
     fn halt(&mut self) -> Result<()> {
+        /*
+        //target is halted whenever a command is sent
+        log::trace!("halting");
         self.stream.write_all(&[GDB_PACKET_HALT])?;
-
-        let reply = self.recv(false)?;
+        let reply = self.recvdata()?;
         log::trace!("halt reply: {}", reply);
         self.halted = true;
-
+        */
         Ok(())
     }
 
@@ -1134,6 +1129,7 @@ impl Core for GDBCore {
         // it to be halted.
         //
         if self.halted {
+            log::trace!("running core");
             self.firecmd("c")?;
             self.halted = false;
         }
@@ -1510,6 +1506,9 @@ pub fn attach_to_chip(
             if let Ok(probe) = attach_to_chip("jlink", hubris, chip) {
                 return Ok(probe);
             }
+            if let Ok(probe) = attach_to_chip("qemu", hubris, chip) {
+                return Ok(probe);
+            }
 
             attach_to_chip("usb", hubris, chip)
         }
@@ -1524,6 +1523,13 @@ pub fn attach_to_chip(
         "jlink" => {
             let core = GDBCore::new(GDBServer::JLink)?;
             crate::msg!("attached via JLink");
+
+            Ok(Box::new(core))
+        }
+
+        "qemu" => {
+            let core = GDBCore::new(GDBServer::Qemu)?;
+            crate::msg!("attached via QEMU GDB server");
 
             Ok(Box::new(core))
         }
