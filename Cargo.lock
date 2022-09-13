@@ -1030,6 +1030,7 @@ dependencies = [
  "humility-cmd-isp",
  "humility-cmd-itm",
  "humility-cmd-jefe",
+ "humility-cmd-log",
  "humility-cmd-lpc55gpio",
  "humility-cmd-manifest",
  "humility-cmd-map",
@@ -1396,6 +1397,16 @@ dependencies = [
  "humility-core",
  "log",
  "parse_int",
+]
+
+[[package]]
+name = "humility-cmd-log"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.2.21",
+ "humility-cmd",
+ "humility-core",
 ]
 
 [[package]]
