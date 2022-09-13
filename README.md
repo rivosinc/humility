@@ -231,6 +231,7 @@ a specified target.  (In the above example, one could execute `humility
 - [humility flash](#humility-flash): flash archive onto attached device
 - [humility gdb](#humility-gdb): Attach to a running system using GDB
 - [humility gpio](#humility-gpio): GPIO pin manipulation
+- [humility halt](#humility-halt): Halt the chip using debug module
 - [humility hash](#humility-hash): Access to the HASH block
 - [humility hiffy](#humility-hiffy): manipulate HIF execution
 - [humility i2c](#humility-i2c): scan for and read I2C devices
@@ -252,6 +253,7 @@ a specified target.  (In the above example, one could execute `humility
 - [humility rencm](#humility-rencm): query Renesas 8A3400X ClockMatrix parts
 - [humility rendmp](#humility-rendmp): Renesas digital muliphase controller operations
 - [humility reset](#humility-reset): Reset the chip using external pins
+- [humility resume](#humility-resume): Resume the chip using debug module
 - [humility ringbuf](#humility-ringbuf): read and display a specified ring buffer
 - [humility rpc](#humility-rpc): execute Idol calls over a network
 - [humility sensors](#humility-sensors): query sensors and sensor data
@@ -650,6 +652,12 @@ For example, to configure pin 5 on port A as a push-pull output:
 ```console
 % humility gpio -c Output:PushPull:High:None:AF0 -p A:5
 ```
+
+
+
+### `humility halt`
+
+`humility halt` will halt the system using the debug interface
 
 
 
@@ -1216,7 +1224,10 @@ VSC8552; this is indicated with `--` in the relevant table positions.
 
 ### `humility openocd`
 
-This command launches OpenOCD based on the config file in a build archive
+This command launches OpenOCD based on the config file in a build archive,
+which then allows one to connect with either GDB or directly via telnet.
+If the intention is to only run GDB, note that `humility gdb --run-openocd`
+will both run OpenOCD and run a foreground GDB that is connected to it.
 
 
 
@@ -1731,6 +1742,12 @@ humility: image CRC (0x841f35a5) matches OTP CRC
 
 `humility reset` will hard reset the system using the debug pin
 or using software reset with the appropriate flag
+
+
+### `humility resume`
+
+`humility resume` will resume the core using the debug interface
+
 
 
 ### `humility ringbuf`
