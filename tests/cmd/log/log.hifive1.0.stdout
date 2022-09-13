@@ -1,0 +1,4 @@
+humility: stringbuf ringbuf::stringbuf::LOG__STRINGBUF in jefe:
+54892: Task #2 Memory fault at address 0x0
+54895: Task #2 Illegal instruction
+54897: Task #2 Memory fault at address 0x0
