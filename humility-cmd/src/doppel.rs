@@ -313,6 +313,42 @@ impl humility::reflect::Load for TaskId {
 }
 
 /// Double of the struct from `ringbuf`.
+/// We will need a 32bit and a 64bit version since last is stored as a usize
+///
+#[derive(Clone, Debug, Load)]
+pub struct Stringbuf32 {
+    pub last: Option<u32>,
+    pub buffer: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Load)]
+pub struct Stringbuf64 {
+    pub last: Option<u64>,
+    pub buffer: Vec<u8>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Stringbuf {
+    pub last: Option<u64>,
+    pub buffer: Vec<u8>,
+}
+
+impl humility::reflect::Load for Stringbuf {
+    fn from_value(v: &Value) -> Result<Self> {
+        if let Ok(buf) = Stringbuf32::from_value(v) {
+            Ok(Self {
+                last: buf.last.map(|last| last as u64),
+                buffer: buf.buffer,
+            })
+        } else if let Ok(buf) = Stringbuf64::from_value(v) {
+            Ok(Self { last: buf.last, buffer: buf.buffer })
+        } else {
+            bail!("unexpected stringbuf format: {:?}", v)
+        }
+    }
+}
+
+/// Double of the struct from `ringbuf`.
 ///
 /// The Hubris equivalent has a type parameter. We're dynamic instead: the
 /// `payload` is just read in as a generic `Value`.
