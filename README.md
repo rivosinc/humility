@@ -242,6 +242,7 @@ a specified target.  (In the above example, one could execute `humility
 - [humility isp](#humility-isp): run ISP commands on the LPC55
 - [humility itm](#humility-itm): commands for ARM's Instrumentation Trace Macrocell (ITM)
 - [humility jefe](#humility-jefe): influence jefe externally
+- [humility log](#humility-log): read and display a log (st)ring buffer
 - [humility lpc55gpio](#humility-lpc55gpio): LPC55 GPIO pin manipulation
 - [humility manifest](#humility-manifest): print archive manifest
 - [humility map](#humility-map): print memory map, with association of regions to tasks
@@ -939,6 +940,31 @@ To restart a task that has had a fault injected, again use the `-r` flag to
 change its disposition back to restart.
 
 Finally, to start a task that is not started by default, use the `-s` flag.
+
+
+
+### `humility log`
+
+`humility log` reads and displays any Hubris string buffers (as created
+via the `stringbuf!` macro in the Hubris `ringbuf` crate).  e.g.:
+
+```console
+% humility log -m LOG_RINGBUF
+humility: attached via J-Link
+humility: stringbuf ringbuf::stringbuf::LOG__STRINGBUF in jefe:
+5532: Task #2 Illegal instruction
+5535: Task #2 Memory fault at address 0x0
+5537: Task #2 Illegal instruction
+...
+```
+
+Use `-m` or `--monitor` to continuously monitor the buffer, otherwise will just print the
+current log and exit.  When in monitor mode, the time (ms) between scanning for new log entries
+can be changed with '-d' or '--delay', it defaults to 100ms.
+
+If an argument is provided, only string buffers that have a name that
+contains the argument as a substring, or are in a task that contains
+the argument as a substring will be displayed.
 
 
 
