@@ -1110,14 +1110,12 @@ impl Core for GDBCore {
     }
 
     fn halt(&mut self) -> Result<()> {
-        /*
-        //target is halted whenever a command is sent
+        //target is halted whenever a command is sent, so just send help
         log::trace!("halting");
-        self.stream.write_all(&[GDB_PACKET_HALT])?;
+        self.firecmd("h")?;
         let reply = self.recvdata()?;
         log::trace!("halt reply: {}", reply);
         self.halted = true;
-        */
         Ok(())
     }
 
