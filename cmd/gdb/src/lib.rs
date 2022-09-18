@@ -169,6 +169,8 @@ pub fn gdb(
             .arg("-ex")
             .arg("set confirm off")
             .arg("-ex")
+            .arg("disconnect")
+            .arg("-ex")
             .arg("quit");
         cmd.current_dir(work_dir.path());
         let status = cmd.status()?;
