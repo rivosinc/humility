@@ -964,7 +964,7 @@ impl GDBCore {
     }
 
     fn sendcmd(&mut self, cmd: &str) -> Result<String> {
-        let just_halted = false;
+        let mut just_halted = false;
         self.firecmd(cmd)?;
         //TODO spec says you should send an ack, but only seems to cause problems
         //self.recvack()?;
@@ -973,6 +973,7 @@ impl GDBCore {
         // if core halted
         if data.contains("T02thread") {
             self.halted = true;
+            just_halted = true;
             self.sendack()?;
             log::trace!("halted: trying again");
             self.firecmd(cmd)?;
