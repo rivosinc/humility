@@ -971,7 +971,7 @@ impl GDBCore {
 
         let mut data = self.recvdata()?;
         // if core halted
-        if data.contains("T02thread:01;") {
+        if data.contains("T02thread") {
             self.halted = true;
             self.sendack()?;
             log::trace!("halted: trying again");
@@ -1032,7 +1032,7 @@ impl GDBCore {
                 // It is decoded to mean that thread 1 halted.
                 // It is used here to determine if the core was halted when humility connected, as any connection to the gdb server halts the core.
                 // If the core was already halted, this packet will not be received.
-                if !data.contains("T02thread:01") {
+                if !data.contains("T02thread") {
                     bail!("Target did not halt on connect");
                 }
                 log::trace!("connected to running core");
