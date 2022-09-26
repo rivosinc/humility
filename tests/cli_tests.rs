@@ -34,6 +34,7 @@ fn make_tests() -> Result<()> {
         Test::basic("manifest"),
         Test::basic("spd"),
         Test::basic("map"),
+        Test::basic("pmp"),
         Test::basic("registers"),
         Test::witharg("registers-s", "registers", "-s"),
         Test::basic("ringbuf"),
