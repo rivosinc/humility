@@ -13,6 +13,8 @@ use std::fmt::Debug;
 
 pub mod arm;
 pub mod rv;
+pub mod uhsize;
+use uhsize::UhSize;
 
 pub trait Arch {
     ///
@@ -24,6 +26,11 @@ pub trait Arch {
     /// Return elf header byte `EI_CLASS` from `e_ident` for this architecture
     ///
     fn get_ei_class(&self) -> u8;
+
+    /// 
+    /// Return the number of bits in a word
+    ///
+    fn get_bits(&self) -> usize;
 
     ///
     /// Returns the instruction used to trigger a syscall
@@ -84,9 +91,7 @@ pub trait Arch {
     /// These must be cleared to get a true address.
     /// (arm has the thumb bit)
     ///
-    fn extract_fn_pointer(&self, data: u32) -> u32 {
-        data
-    }
+    fn extract_fn_pointer(&self, data: &mut UhSize) {}
 
     fn instr_operands(
         &self,

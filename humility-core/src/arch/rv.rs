@@ -40,6 +40,10 @@ impl Arch for RVArch {
         self.ei_class
     }
 
+    fn get_bits(&self) -> usize {
+        32
+    }
+
     fn get_syscall_insn(&self) -> u32 {
         RiscVInsn::RISCV_INS_ECALL as u32
     }

@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::arch::{get_arch, Arch};
+use crate::arch::{get_arch, Arch, uhsize::UhSize};
 use crate::regs::Register;
 use capstone::prelude::*;
 use indexmap::IndexMap;
@@ -260,13 +260,13 @@ pub struct HubrisArchive {
     pub arch: Option<Box<dyn Arch>>,
 
     // app table
-    apptable: Option<(u32, Vec<u8>)>,
+    apptable: Option<(u64, Vec<u8>)>,
 
     // image ID
-    imageid: Option<(u32, Vec<u8>)>,
+    imageid: Option<(u64, Vec<u8>)>,
 
     // loaded regions
-    loaded: BTreeMap<u32, HubrisRegion>,
+    loaded: BTreeMap<u64, HubrisRegion>,
 
     // current object
     current: u32,
@@ -276,7 +276,7 @@ pub struct HubrisArchive {
 
     // Instructions: address to bytes/target tuple. The target will be None if
     // the instruction did not decode as some kind of jump/branch/call.
-    pub instrs: HashMap<u32, (Vec<u8>, Option<HubrisTarget>)>,
+    pub instrs: HashMap<u64, (Vec<u8>, Option<HubrisTarget>)>,
 
     // Manual stack pushes before a syscall
     syscall_pushes: HashMap<u32, Option<Vec<Register>>>,
@@ -285,7 +285,7 @@ pub struct HubrisArchive {
     registers: HashMap<Register, u32>,
 
     // Modules: text address to module
-    modules: BTreeMap<u32, HubrisModule>,
+    modules: BTreeMap<u64, HubrisModule>,
 
     // Tasks: name of task to ID
     tasks: HashMap<String, HubrisTask>,
@@ -297,16 +297,16 @@ pub struct HubrisArchive {
     src: HashMap<HubrisGoff, HubrisSrc>,
 
     // DWARF symbols: address to HubrisSymbol
-    dsyms: BTreeMap<u32, HubrisSymbol>,
+    dsyms: BTreeMap<u64, HubrisSymbol>,
 
     // ELF symbols: address to name/length tuple
-    esyms: BTreeMap<u32, (String, u32)>,
+    esyms: BTreeMap<u64, (String, u64)>,
 
     // ELF symbols: name to value/length
-    esyms_byname: MultiMap<String, (u32, u32)>,
+    esyms_byname: MultiMap<String, (UhSize, u64)>,
 
     // Inlined: address/nesting tuple to length/goff/origin tuple
-    inlined: BTreeMap<(u32, isize), (u32, HubrisGoff, HubrisGoff)>,
+    inlined: BTreeMap<(u64, isize), (u32, HubrisGoff, HubrisGoff)>,
 
     // Subprograms: goff to demangled name
     subprograms: HashMap<HubrisGoff, String>,
@@ -390,11 +390,11 @@ impl HubrisArchive {
         })
     }
 
-    pub fn instr_len(&self, addr: u32) -> Option<u32> {
+    pub fn instr_len(&self, addr: u64) -> Option<u32> {
         self.instrs.get(&addr).map(|instr| instr.0.len() as u32)
     }
 
-    pub fn instr_mod(&self, addr: u32) -> Option<&str> {
+    pub fn instr_mod(&self, addr: u64) -> Option<&str> {
         if let Some(module) = self.modules.range(..=addr).next_back() {
             if addr < *module.0 + module.1.textsize {
                 Some(&module.1.name)
@@ -406,8 +406,8 @@ impl HubrisArchive {
         }
     }
 
-    pub fn instr_sym(&self, addr: u32) -> Option<(&str, u32)> {
-        let sym: Option<(&str, u32)>;
+    pub fn instr_sym(&self, addr: u64) -> Option<(&str, u64)> {
+        let sym: Option<(&str, u64)>;
 
         //
         // First, check our DWARF symbols.
@@ -430,7 +430,7 @@ impl HubrisArchive {
         })
     }
 
-    pub fn instr_inlined(&self, pc: u32, base: u32) -> Vec<HubrisInlined> {
+    pub fn instr_inlined(&self, pc: u64, base: u64) -> Vec<HubrisInlined> {
         let mut inlined: Vec<HubrisInlined> = vec![];
 
         //
@@ -634,7 +634,7 @@ impl HubrisArchive {
                 // If we've got the low and high defined, we'll just go ahead
                 // and terminate here.
                 self.inlined
-                    .insert((addr as u32, depth), (len as u32, goff, origin));
+                    .insert((addr, depth), (len, goff, origin));
 
                 return Ok(());
             }
@@ -663,8 +663,8 @@ impl HubrisArchive {
                         end,
                     } = r
                     {
-                        let begin = begin as u32;
-                        let end = end as u32;
+                        let begin = begin as u64;
+                        let end = end as u64;
 
                         self.inlined.insert(
                             (begin, depth),
@@ -734,12 +734,12 @@ impl HubrisArchive {
             match (addr, len) {
                 (Some(addr), Some(len)) if addr != 0 => {
                     self.dsyms.insert(
-                        addr as u32,
+                        addr,
                         HubrisSymbol {
                             name: name.to_string(),
                             demangled_name,
-                            size: len as u32,
-                            addr: addr as u32,
+                            size: len,
+                            addr: addr,
                             goff,
                         },
                     );
@@ -1037,7 +1037,7 @@ impl HubrisArchive {
 
             if let Some(syms) = self.esyms_byname.get_vec(linkage) {
                 for &(addr, size) in syms {
-                    if let btree_map::Entry::Vacant(e) = self.dsyms.entry(addr)
+                    if let btree_map::Entry::Vacant(e) = self.dsyms.entry(addr.base)
                     {
                         e.insert(HubrisSymbol {
                             name: String::from(name),
@@ -1739,7 +1739,7 @@ impl HubrisArchive {
         object: &str,
         task: HubrisTask,
         func: &str,
-        addr: u32,
+        addr: u64,
         buffer: &[u8],
     ) -> Result<()> {
         let instrs =
@@ -1753,10 +1753,10 @@ impl HubrisArchive {
                 }
             };
 
-        let mut last: (u32, usize) = (0, 0);
+        let mut last: (u64, usize) = (0, 0);
 
         for (ndx, instr) in instrs.iter().enumerate() {
-            let addr: u32 = instr.address() as u32;
+            let addr: u64 = instr.address();
 
             if self.instrs.contains_key(&addr) {
                 //
@@ -1792,7 +1792,7 @@ impl HubrisArchive {
             if InsnId(syscall_instr) == instr.id() && task != HubrisTask::Kernel
             {
                 self.syscall_pushes.insert(
-                    addr + b.len() as u32,
+                    addr + b.len() as u64,
                     self.arch
                         .as_ref()
                         .unwrap()
@@ -1810,11 +1810,11 @@ impl HubrisArchive {
         // it won't flag an error -- it will simply stop short.  Check to see
         // if we are in this case and explicitly fail.
         //
-        if last.0 + last.1 as u32 != addr + buffer.len() as u32 {
+        if last.0 + last.1 != addr + buffer.len() {
             bail!(
                 "short disassembly for {} in {}: \
                 stopped at 0x{:x}, expected to go to 0x{:x}",
-                func, object, last.0, addr + buffer.len() as u32
+                func, object, last.0, addr + buffer.len()
             );
         }
 
@@ -1874,8 +1874,8 @@ impl HubrisArchive {
             .map(|(ndx, _)| ndx)
             .collect::<HashSet<_>>();
 
-        let offset = textsec.sh_offset as u32;
-        let size = textsec.sh_size as u32;
+        let offset = textsec.sh_offset;
+        let size = textsec.sh_size;
         let current = self.current;
 
         log::trace!("loading {} as object {}", object, self.current);
@@ -1896,11 +1896,11 @@ impl HubrisArchive {
             // We track from the start of our BSS to the end of our heap
             //
             if name == "__sbss" {
-                heapbss.0 = Some(sym.st_value as u32);
+                heapbss.0 = Some(sym.st_value);
             }
 
             if name == "__eheap" {
-                heapbss.1 = Some(sym.st_value as u32);
+                heapbss.1 = Some(sym.st_value);
             }
 
             //
@@ -1911,11 +1911,11 @@ impl HubrisArchive {
                 && sym.st_shndx == section_header::SHN_ABS as usize
             {
                 if name == "_stack_base" {
-                    kstack.0 = Some(sym.st_value as u32);
+                    kstack.0 = Some(sym.st_value);
                 }
 
                 if name == "_stack_start" {
-                    kstack.1 = Some(sym.st_value as u32);
+                    kstack.1 = Some(sym.st_value);
                 }
             }
 
@@ -1934,12 +1934,9 @@ impl HubrisArchive {
             // microprocessor that executes only Thumb instructions).
             //
             let val = if sym.is_function() {
-                self.arch
-                    .as_ref()
-                    .unwrap()
-                    .extract_fn_pointer(sym.st_value as u32)
+                self.arch.as_ref().unwrap().extract_fn_pointer(sym.st_value)
             } else {
-                sym.st_value as u32
+                sym.st_value
             };
 
             let dem = format!("{:#}", demangle(name));
@@ -1951,8 +1948,8 @@ impl HubrisArchive {
             //
             if task == HubrisTask::Kernel && name == "HUBRIS_IMAGE_ID" {
                 let sec = &elf.section_headers[sym.st_shndx];
-                let offset = sec.sh_offset as u32;
-                let o = ((val - sec.sh_addr as u32) + offset) as usize;
+                let offset = sec.sh_offset;
+                let o = ((val - sec.sh_addr) + offset) as usize;
                 let id = buffer.get(o..o + (sym.st_size as usize)).ok_or_else(
                     || anyhow!("bad offset/size for {}: {:?}", name, sym),
                 )?;
@@ -1961,11 +1958,11 @@ impl HubrisArchive {
             }
 
             self.esyms_byname
-                .insert(name.to_string(), (val, sym.st_size as u32));
-            self.esyms.insert(val, (dem, sym.st_size as u32));
+                .insert(name.to_string(), (val, sym.st_size));
+            self.esyms.insert(val.base, (dem, sym.st_size));
 
             if sym.is_function() {
-                let o = ((val - textsec.sh_addr as u32) + offset) as usize;
+                let o = ((val - textsec.sh_addr) + offset) as usize;
                 let t = buffer.get(o..o + (sym.st_size as usize)).ok_or_else(
                     || {
                         anyhow!("bad offset/size for {}: 0x{:x}, size {}",
@@ -1984,9 +1981,9 @@ impl HubrisArchive {
             .filter(|h| h.p_type == goblin::elf::program_header::PT_LOAD)
             .map(|h| HubrisRegion {
                 daddr: None,
-                base: h.p_vaddr as u32,
-                size: h.p_memsz as u32,
-                mapsize: h.p_memsz as u32,
+                base: h.p_vaddr,
+                size: h.p_memsz,
+                mapsize: h.p_memsz,
                 attr: HubrisRegionAttr {
                     read: h.p_flags & PF_R != 0,
                     write: h.p_flags & PF_W != 0,
@@ -2022,7 +2019,7 @@ impl HubrisArchive {
                 let len = sec.sh_size as usize;
 
                 self.apptable = Some((
-                    sec.sh_addr as u32,
+                    sec.sh_addr,
                     buffer[base..base + len].to_vec(),
                 ));
             }
@@ -2064,13 +2061,13 @@ impl HubrisArchive {
         let iface = self.load_object_idolatry(buffer, &elf)?;
 
         self.modules.insert(
-            textsec.sh_addr as u32,
+            textsec.sh_addr,
             HubrisModule {
                 name: String::from(object),
                 object: current,
-                textbase: (textsec.sh_addr as u32),
-                textsize: size as u32,
-                memsize: memsz as u32,
+                textbase: textsec.sh_addr,
+                textsize: size,
+                memsize: memsz,
                 heapbss,
                 task,
                 iface,
@@ -2735,7 +2732,7 @@ impl HubrisArchive {
     ///
     /// Looks up the specified symbol.  This is more of a convenience routine
     /// that turns an Option into a Result.
-    pub fn lookup_symword(&self, name: &str) -> Result<u32> {
+    pub fn lookup_symword(&self, name: &str) -> Result<u64> {
         match self.esyms_byname.get(name) {
             Some(sym) => {
                 if sym.1 != 4 {
@@ -2797,13 +2794,14 @@ impl HubrisArchive {
         let index = HubrisTask::Task(index as u32);
         // TODO this is super gross but we don't have the inverse of the tasks
         // mapping at the moment.
+        // TODO did fawaz add this
         self.tasks.iter().find(|(_, &i)| i == index).map(|(name, _)| &**name)
     }
 
     pub fn task_table(
         &self,
         core: &mut dyn crate::core::Core,
-    ) -> Result<(u32, u32)> {
+    ) -> Result<(u64, u64)> {
         //
         // On older kernels, we expect to find the task table through an
         // indirect pointer (TASK_TABLE_BASE); on newer kernels, it's entirely
@@ -2821,7 +2819,7 @@ impl HubrisArchive {
             Ok((base, size))
         } else if let Ok(t) = self.lookup_variable("HUBRIS_TASK_TABLE_SPACE") {
             let task = self.lookup_struct_byname("Task")?;
-            Ok((t.addr, (t.size / task.size) as u32))
+            Ok((t.addr, (t.size / task.size)))
         } else {
             bail!(
                 "could not find task table as \
@@ -4350,16 +4348,16 @@ impl fmt::Display for HubrisGoff {
 
 #[derive(Clone, Debug)]
 pub struct HubrisSymbol {
-    pub addr: u32,
+    pub addr: u64,
     pub name: String,
     pub demangled_name: String,
-    pub size: u32,
+    pub size: u64,
     pub goff: HubrisGoff,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct HubrisInlined<'a> {
-    pub addr: u32,
+    pub addr: u64,
     pub name: &'a str,
     pub id: HubrisGoff,
     pub origin: HubrisGoff,
@@ -4434,7 +4432,7 @@ impl HubrisStruct {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct HubrisVariable {
     pub goff: HubrisGoff,
-    pub addr: u32,
+    pub addr: u64,
     pub size: usize,
 }
 
@@ -4459,13 +4457,13 @@ pub struct HubrisRegion {
     pub daddr: Option<u32>,
 
     /// Base address of region
-    pub base: u32,
+    pub base: u64,
 
     /// Size of region
-    pub size: u32,
+    pub size: u64,
 
     /// Size of mapping, which (for flash mappings) is memory in use
-    pub mapsize: u32,
+    pub mapsize: u64,
 
     /// Attributes of this region
     pub attr: HubrisRegionAttr,
@@ -4798,10 +4796,10 @@ pub struct HubrisModule {
     pub name: String,
     pub object: u32,
     pub task: HubrisTask,
-    pub textbase: u32,
-    pub textsize: u32,
-    pub memsize: u32,
-    pub heapbss: (Option<u32>, Option<u32>),
+    pub textbase: u64,
+    pub textsize: u64,
+    pub memsize: u64,
+    pub heapbss: (Option<u64>, Option<u64>),
     pub iface: Option<Interface>,
 }
 

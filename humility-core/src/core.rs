@@ -28,14 +28,14 @@ use goblin::elf::Elf;
 
 pub trait Core {
     fn info(&self) -> (String, Option<String>);
-    fn read_word_32(&mut self, addr: u32) -> Result<u32>;
-    fn read_8(&mut self, addr: u32, data: &mut [u8]) -> Result<()>;
-    fn read_reg(&mut self, reg: Register) -> Result<u32>;
-    fn write_reg(&mut self, reg: Register, value: u32) -> Result<()>;
+    fn read_word_32(&mut self, addr: u64) -> Result<u32>;
+    fn read_8(&mut self, addr: u64, data: &mut [u8]) -> Result<()>;
+    fn read_reg(&mut self, reg: Register) -> Result<u64>;
+    fn write_reg(&mut self, reg: Register, value: u64) -> Result<()>;
     fn init_swv(&mut self) -> Result<()>;
     fn read_swv(&mut self) -> Result<Vec<u8>>;
-    fn write_word_32(&mut self, addr: u32, data: u32) -> Result<()>;
-    fn write_8(&mut self, addr: u32, data: &[u8]) -> Result<()>;
+    fn write_word_32(&mut self, addr: u64, data: u32) -> Result<()>;
+    fn write_8(&mut self, addr: u64, data: &[u8]) -> Result<()>;
 
     fn halt(&mut self) -> Result<()>;
     fn run(&mut self) -> Result<()>;
@@ -44,7 +44,7 @@ pub trait Core {
         false
     }
 
-    fn read_word_64(&mut self, addr: u32) -> Result<u64> {
+    fn read_word_64(&mut self, addr: u64) -> Result<u64> {
         let mut buf = [0; 8];
         self.read_8(addr, &mut buf)?;
         Ok(u64::from_le_bytes(buf))
@@ -103,27 +103,27 @@ impl Core for UnattachedCore {
         (ident, self.serial_number.clone())
     }
 
-    fn read_word_32(&mut self, _addr: u32) -> Result<u32> {
+    fn read_word_32(&mut self, _addr: u64) -> Result<u32> {
         bail!("Unimplemented when unattached!");
     }
 
-    fn read_8(&mut self, _addr: u32, _data: &mut [u8]) -> Result<()> {
+    fn read_8(&mut self, _addr: u64, _data: &mut [u8]) -> Result<()> {
         bail!("Unimplemented when unattached!");
     }
 
-    fn read_reg(&mut self, _reg: Register) -> Result<u32> {
+    fn read_reg(&mut self, _reg: Register) -> Result<u64> {
         bail!("Unimplemented when unattached!");
     }
 
-    fn write_reg(&mut self, _reg: Register, _value: u32) -> Result<()> {
+    fn write_reg(&mut self, _reg: Register, _value: u64) -> Result<()> {
         bail!("Unimplemented when unattached!");
     }
 
-    fn write_word_32(&mut self, _addr: u32, _data: u32) -> Result<()> {
+    fn write_word_32(&mut self, _addr: u64, _data: u32) -> Result<()> {
         bail!("Unimplemented when unattached!");
     }
 
-    fn write_8(&mut self, _addr: u32, _data: &[u8]) -> Result<()> {
+    fn write_8(&mut self, _addr: u64, _data: &[u8]) -> Result<()> {
         bail!("Unimplemented when unattached!");
     }
 
@@ -176,8 +176,8 @@ pub struct ProbeCore {
     pub product_id: u16,
     pub serial_number: Option<String>,
     unhalted_reads: bool,
-    halted: u32,
-    unhalted_read: BTreeMap<u32, u32>,
+    halted: u64,
+    unhalted_read: BTreeMap<u64, u64>,
     can_flash: bool,
 }
 
@@ -245,7 +245,7 @@ impl Core for ProbeCore {
         (ident, self.serial_number.clone())
     }
 
-    fn read_word_32(&mut self, addr: u32) -> Result<u32> {
+    fn read_word_32(&mut self, addr: u64) -> Result<u32> {
         log::trace!("reading word at {:x}", addr);
         let mut rval = 0;
 
@@ -264,14 +264,14 @@ impl Core for ProbeCore {
         Ok(rval)
     }
 
-    fn read_8(&mut self, addr: u32, data: &mut [u8]) -> Result<()> {
+    fn read_8(&mut self, addr: u64, data: &mut [u8]) -> Result<()> {
         if data.len() > CORE_MAX_READSIZE {
             bail!("read of {} bytes at 0x{:x} exceeds max of {}",
                 data.len(), addr, CORE_MAX_READSIZE);
         }
 
         if let Some(range) = self.unhalted_read.range(..=addr).next_back() {
-            if addr + (data.len() as u32) < range.0 + range.1 {
+            if addr + (data.len() as u64) < range.0 + range.1 {
                 let mut core = self.session.core(0)?;
                 return Ok(core.read_8(addr, data)?);
             }
@@ -280,7 +280,7 @@ impl Core for ProbeCore {
         self.halt_and_read(|core| Ok(core.read_8(addr, data)?))
     }
 
-    fn read_reg(&mut self, reg: Register) -> Result<u32> {
+    fn read_reg(&mut self, reg: Register) -> Result<u64> {
         let mut core = self.session.core(0)?;
         let reg_id = Register::to_u16(&reg).unwrap();
 
@@ -291,7 +291,7 @@ impl Core for ProbeCore {
         ))?)
     }
 
-    fn write_reg(&mut self, reg: Register, value: u32) -> Result<()> {
+    fn write_reg(&mut self, reg: Register, value: u64) -> Result<()> {
         let mut core = self.session.core(0)?;
         let reg_id = Register::to_u16(&reg).unwrap();
 
@@ -305,13 +305,13 @@ impl Core for ProbeCore {
         Ok(())
     }
 
-    fn write_word_32(&mut self, addr: u32, data: u32) -> Result<()> {
+    fn write_word_32(&mut self, addr: u64, data: u32) -> Result<()> {
         let mut core = self.session.core(0)?;
         core.write_word_32(addr, data)?;
         Ok(())
     }
 
-    fn write_8(&mut self, addr: u32, data: &[u8]) -> Result<()> {
+    fn write_8(&mut self, addr: u64, data: &[u8]) -> Result<()> {
         let mut core = self.session.core(0)?;
         core.write_8(addr, data)?;
         Ok(())
@@ -566,14 +566,14 @@ impl Core for OpenOCDCore {
         ("OpenOCD".to_string(), None)
     }
 
-    fn read_word_32(&mut self, addr: u32) -> Result<u32> {
+    fn read_word_32(&mut self, addr: u64) -> Result<u32> {
         self.op_start()?;
         let result = self.sendcmd(&format!("mrw 0x{:x}", addr))?;
         self.op_done()?;
-        Ok(result.parse::<u32>()?)
+        Ok(result.parse::<u64>()?)
     }
 
-    fn read_8(&mut self, addr: u32, data: &mut [u8]) -> Result<()> {
+    fn read_8(&mut self, addr: u64, data: &mut [u8]) -> Result<()> {
         ensure!(
             data.len() <= CORE_MAX_READSIZE,
             "read of {} bytes at 0x{:x} exceeds max of {}",
@@ -647,7 +647,7 @@ impl Core for OpenOCDCore {
         Ok(())
     }
 
-    fn write_reg(&mut self, _reg: Register, _val: u32) -> Result<()> {
+    fn write_reg(&mut self, _reg: Register, _val: u64) -> Result<()> {
         // This does not work right now, TODO?
         // openocd does support reading though
         //
@@ -656,7 +656,7 @@ impl Core for OpenOCDCore {
         ))
     }
 
-    fn read_reg(&mut self, reg: Register) -> Result<u32> {
+    fn read_reg(&mut self, reg: Register) -> Result<u64> {
         let mut reg_id = Register::to_u16(&reg).unwrap();
         if let Register::RiscV(rv_reg) = reg {
             log::trace!("converting register id for openocd");
@@ -671,7 +671,7 @@ impl Core for OpenOCDCore {
 
         if let Some(line) = rval.lines().next() {
             if let Some(val) = line.split_whitespace().last() {
-                if let Ok(rval) = parse_int::parse::<u32>(val) {
+                if let Ok(rval) = parse_int::parse::<u64>(val) {
                     return Ok(rval);
                 }
             }
@@ -758,14 +758,14 @@ impl Core for OpenOCDCore {
         Ok(swv)
     }
 
-    fn write_word_32(&mut self, addr: u32, data: u32) -> Result<()> {
+    fn write_word_32(&mut self, addr: u64, data: u32) -> Result<()> {
         self.op_start()?;
         self.sendcmd(&format!("mww 0x{:x} 0x{:x}", addr, data))?;
         self.op_done()?;
         Ok(())
     }
 
-    fn write_8(&mut self, _addr: u32, _data: &[u8]) -> Result<()> {
+    fn write_8(&mut self, _addr: u64, _data: &[u8]) -> Result<()> {
         bail!("OpenOCD target does not support modifying state");
     }
 
@@ -869,7 +869,7 @@ impl GDBCore {
 
         for b in cmd.as_bytes() {
             payload.push(*b);
-            cksum += *b as u32;
+            cksum += *b as u64;
         }
 
         //
@@ -1056,13 +1056,13 @@ impl Core for GDBCore {
         ("GDB".to_string(), None)
     }
 
-    fn read_word_32(&mut self, addr: u32) -> Result<u32> {
+    fn read_word_32(&mut self, addr: u64) -> Result<u32> {
         let mut data = [0; 4];
         self.read_8(addr, &mut data)?;
-        Ok(u32::from_le_bytes(data))
+        Ok(u64::from_le_bytes(data))
     }
 
-    fn read_8(&mut self, addr: u32, data: &mut [u8]) -> Result<()> {
+    fn read_8(&mut self, addr: u64, data: &mut [u8]) -> Result<()> {
         let cmd = format!("m{:x},{:x}", addr, data.len());
 
         let rstr = self.sendcmd(&cmd)?;
@@ -1080,7 +1080,7 @@ impl Core for GDBCore {
         Ok(())
     }
 
-    fn read_reg(&mut self, reg: Register) -> Result<u32> {
+    fn read_reg(&mut self, reg: Register) -> Result<u64> {
         let reg_id = Register::to_u16(&reg).unwrap();
         use num_traits::ToPrimitive;
 
@@ -1088,22 +1088,22 @@ impl Core for GDBCore {
 
         let rstr = self.sendcmd(cmd)?;
 
-        Ok(u32::from_str_radix(&rstr, 16)?)
+        Ok(u64::from_str_radix(&rstr, 16)?)
     }
 
-    fn write_reg(&mut self, _reg: Register, _value: u32) -> Result<()> {
+    fn write_reg(&mut self, _reg: Register, _value: u64) -> Result<()> {
         Err(anyhow!(
             "{} GDB target does not support modifying state", self.server
         ))
     }
 
-    fn write_word_32(&mut self, _addr: u32, _data: u32) -> Result<()> {
+    fn write_word_32(&mut self, _addr: u64, _data: u32) -> Result<()> {
         Err(anyhow!(
             "{} GDB target does not support modifying state", self.server
         ))
     }
 
-    fn write_8(&mut self, _addr: u32, _data: &[u8]) -> Result<()> {
+    fn write_8(&mut self, _addr: u64, _data: &[u8]) -> Result<()> {
         Err(anyhow!(
             "{} GDB target does not support modifying state", self.server
         ))
@@ -1159,8 +1159,8 @@ impl Core for GDBCore {
 
 pub struct DumpCore {
     contents: Vec<u8>,
-    regions: BTreeMap<u32, (u32, usize)>,
-    registers: HashMap<Register, u32>,
+    regions: BTreeMap<u64, (u64, usize)>,
+    registers: HashMap<Register, u64>,
 }
 
 impl DumpCore {
@@ -1181,15 +1181,15 @@ impl DumpCore {
             }
 
             regions.insert(
-                phdr.p_vaddr as u32,
-                (phdr.p_memsz as u32, phdr.p_offset as usize),
+                phdr.p_vaddr as u64,
+                (phdr.p_memsz as u64, phdr.p_offset as usize),
             );
         }
 
         Ok(Self { contents, regions, registers: hubris.dump_registers() })
     }
 
-    fn check_offset(&self, addr: u32, rsize: usize, offs: usize) -> Result<()> {
+    fn check_offset(&self, addr: u64, rsize: usize, offs: usize) -> Result<()> {
         if rsize + offs <= self.contents.len() {
             return Ok(());
         }
@@ -1218,7 +1218,7 @@ impl Core for DumpCore {
         ("core dump".to_string(), None)
     }
 
-    fn read_word_32(&mut self, addr: u32) -> Result<u32> {
+    fn read_word_32(&mut self, addr: u64) -> Result<u32> {
         let rsize: usize = 4;
 
         if let Some((&base, &(size, offset))) =
@@ -1226,18 +1226,18 @@ impl Core for DumpCore {
         {
             if base > addr {
                 // fall out to the bail below.
-            } else if (addr - base) + rsize as u32 > size {
+            } else if (addr - base) + rsize as u64 > size {
                 bail!(
                     "0x{:x} is valid, but relative to base (0x{:x}), \
                     offset (0x{:x}) exceeds max (0x{:x})",
-                    addr, base, (addr - base) + rsize as u32, size
+                    addr, base, (addr - base) + rsize as u64, size
                 );
             } else {
                 let offs = offset + (addr - base) as usize;
 
                 self.check_offset(addr, rsize, offs)?;
 
-                return Ok(u32::from_le_bytes(
+                return Ok(u64::from_le_bytes(
                     self.contents[offs..offs + rsize].try_into().unwrap(),
                 ));
             }
@@ -1245,7 +1245,7 @@ impl Core for DumpCore {
         bail!("read from invalid address: 0x{:x}", addr);
     }
 
-    fn read_8(&mut self, addr: u32, data: &mut [u8]) -> Result<()> {
+    fn read_8(&mut self, addr: u64, data: &mut [u8]) -> Result<()> {
         let rsize = data.len();
 
         if let Some((&base, &(size, offset))) =
@@ -1253,11 +1253,11 @@ impl Core for DumpCore {
         {
             if base > addr {
                 // fall out to the bail below.
-            } else if (addr - base) + rsize as u32 > size {
+            } else if (addr - base) + rsize as u64 > size {
                 bail!(
                     "0x{:x} is valid, but relative to base (0x{:x}), \
                     offset (0x{:x}) exceeds max (0x{:x})",
-                    addr, base, (addr - base) + rsize as u32, size
+                    addr, base, (addr - base) + rsize as u64, size
                 );
             } else {
                 let offs = offset + (addr - base) as usize;
@@ -1272,7 +1272,7 @@ impl Core for DumpCore {
         bail!("read of {} bytes from invalid address: 0x{:x}", rsize, addr);
     }
 
-    fn read_reg(&mut self, reg: Register) -> Result<u32> {
+    fn read_reg(&mut self, reg: Register) -> Result<u64> {
         if let Some(val) = self.registers.get(&reg) {
             Ok(*val)
         } else {
@@ -1280,15 +1280,15 @@ impl Core for DumpCore {
         }
     }
 
-    fn write_reg(&mut self, _reg: Register, _value: u32) -> Result<()> {
+    fn write_reg(&mut self, _reg: Register, _value: u64) -> Result<()> {
         bail!("cannot write register on a dump");
     }
 
-    fn write_word_32(&mut self, _addr: u32, _data: u32) -> Result<()> {
+    fn write_word_32(&mut self, _addr: u64, _data: u32) -> Result<()> {
         bail!("cannot write a word on a dump");
     }
 
-    fn write_8(&mut self, _addr: u32, _data: &[u8]) -> Result<()> {
+    fn write_8(&mut self, _addr: u64, _data: &[u8]) -> Result<()> {
         bail!("cannot write a byte on a dump");
     }
 

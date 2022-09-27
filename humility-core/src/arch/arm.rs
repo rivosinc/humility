@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::arch::{instr_source_target, readreg, Arch};
+use crate::arch::{instr_source_target, readreg, Arch, uhsize::UhSize};
 use crate::hubris::{HubrisArchive, HubrisStruct, HubrisTarget};
 use crate::regs::arm::{register_from_id, ARMRegister};
 use crate::regs::Register;
@@ -60,6 +60,10 @@ impl Arch for ARMArch {
 
     fn get_ei_class(&self) -> u8 {
         goblin::elf::header::ELFCLASS32
+    }
+
+    fn get_bits(&self) -> usize {
+        32
     }
 
     fn get_syscall_insn(&self) -> u32 {
@@ -304,7 +308,7 @@ impl Arch for ARMArch {
 
         let mut stack: Vec<u8> = vec![];
         stack.resize_with(NREGS_CORE * 4, Default::default);
-        core.read_8(sp, stack.as_mut_slice())?;
+        core.read_8(sp as u64, stack.as_mut_slice())?;
 
         //
         // R0-R3, and then R12, LR and the PSR are found on the stack
@@ -364,8 +368,8 @@ impl Arch for ARMArch {
             .unwrap())
     }
 
-    fn extract_fn_pointer(&self, data: u32) -> u32 {
-        data & !1
+    fn extract_fn_pointer(&self, data: &mut UhSize) {
+        data.data = data.data & !1
     }
 
     fn instr_operands(
@@ -397,14 +401,14 @@ impl Arch for ARMArch {
 /// which is probably wrong but we haven't totally thought it through yet.
 pub fn arm_instr_target(
     hubris: &HubrisArchive,
-    addr: u32,
+    addr: u64,
 ) -> Option<HubrisTarget> {
     // Target is only used for ETM so no plan to port branch targets to riscv
     //
     hubris.instrs.get(&addr).and_then(|&(_, target)| target)
 }
 
-pub fn unhalted_read_regions() -> BTreeMap<u32, u32> {
+pub fn unhalted_read_regions() -> BTreeMap<u64, u64> {
     let mut map = BTreeMap::new();
 
     //
