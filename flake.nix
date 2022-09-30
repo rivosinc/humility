@@ -2,14 +2,12 @@
   description = "Flake shell to open Hubris and Humility dev environment";
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   inputs.rust-overlay.url = "github:oxalica/rust-overlay";
-  inputs.qemuflake.url = "git+ssh://git@gitlab.ba.rivosinc.com/rv/sw/ext/qemu?ref=dev/drew/opentitan&submodules=1";
   inputs.flake-utils.url = "github:numtide/flake-utils";
 
   outputs = {
     self,
     nixpkgs,
     rust-overlay,
-    qemuflake,
     flake-utils,
   }:
     flake-utils.lib.eachDefaultSystem (system: let
@@ -32,7 +30,7 @@
         };
       };
   
-      humility-overlays = [ humility-overlay qemuflake.overlays.default ];
+      humility-overlays = [ humility-overlay ];
       humility-pkgs = import nixpkgs {
         inherit system;
         overlays = humility-overlays;
@@ -60,10 +58,8 @@
         '';
 
         nativeBuildInputs = with pkgs; [
-          self.packages.${system}.humility
           rust
           openocd
-          qemu
           libusb1
         ] ++ lib.optionals pkgs.stdenv.isLinux[ pkgs.systemd ];
       };

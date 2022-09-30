@@ -48,21 +48,6 @@
     },
     "nixpkgs_2": {
       "locked": {
-        "lastModified": 1653060744,
-        "narHash": "sha256-kfRusllRumpt33J1hPV+CeCCylCXEU7e0gn2/cIM7cY=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "dfd82985c273aac6eced03625f454b334daae2e8",
-        "type": "github"
-      },
-      "original": {
-        "id": "nixpkgs",
-        "ref": "nixos-unstable",
-        "type": "indirect"
-      }
-    },
-    "nixpkgs_3": {
-      "locked": {
         "lastModified": 1659102345,
         "narHash": "sha256-Vbzlz254EMZvn28BhpN8JOi5EuKqnHZ3ujFYgFcSGvk=",
         "owner": "NixOS",
@@ -77,39 +62,17 @@
         "type": "github"
       }
     },
-    "qemuflake": {
-      "inputs": {
-        "nixpkgs": "nixpkgs_2"
-      },
-      "locked": {
-        "lastModified": 1663114803,
-        "narHash": "sha256-IGOyXmmeqCy+owYeR0UjrBY687S260JUk1jm0t33eNs=",
-        "ref": "dev/drew/opentitan",
-        "rev": "cc8253e6668f5e6b5c4f0a6391435518ec10779c",
-        "revCount": 97877,
-        "submodules": true,
-        "type": "git",
-        "url": "ssh://git@gitlab.ba.rivosinc.com/rv/sw/ext/qemu"
-      },
-      "original": {
-        "ref": "dev/drew/opentitan",
-        "submodules": true,
-        "type": "git",
-        "url": "ssh://git@gitlab.ba.rivosinc.com/rv/sw/ext/qemu"
-      }
-    },
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs",
-        "qemuflake": "qemuflake",
         "rust-overlay": "rust-overlay"
       }
     },
     "rust-overlay": {
       "inputs": {
         "flake-utils": "flake-utils_2",
-        "nixpkgs": "nixpkgs_3"
+        "nixpkgs": "nixpkgs_2"
       },
       "locked": {
         "lastModified": 1663297375,
