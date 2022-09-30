@@ -1,9 +1,10 @@
 {
   lib,
+  stdenv,
   rustPlatform,
   cargo,
   pkg-config,
-  systemd,
+  systemd ? null,
   libusb1,
   cargo-readme,
   openocd,
@@ -26,11 +27,9 @@ rustPlatform.buildRustPackage rec {
   ];
 
   buildInputs = [
-    # TODO check islinux system for systemd
-    systemd
     libusb1
     cargo-readme
-  ];
+  ] ++ lib.optionals stdenv.isLinux [ systemd ];
 
   propagatedBuildInputs = [
   #  openocd

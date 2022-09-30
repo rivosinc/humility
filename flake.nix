@@ -60,12 +60,12 @@
         '';
 
         nativeBuildInputs = with pkgs; [
+          self.packages.${system}.humility
           rust
-          systemd
           openocd
           qemu
           libusb1
-        ];
+        ] ++ lib.optionals pkgs.stdenv.isLinux[ pkgs.systemd ];
       };
     });
 }
