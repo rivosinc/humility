@@ -91,7 +91,7 @@ pub trait Arch {
     /// These must be cleared to get a true address.
     /// (arm has the thumb bit)
     ///
-    fn extract_fn_pointer(&self, data: &mut UhSize) {}
+    fn extract_fn_pointer(&self, data: u64) -> u64 { data }
 
     fn instr_operands(
         &self,

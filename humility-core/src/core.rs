@@ -252,12 +252,12 @@ impl Core for ProbeCore {
         if let Some(range) = self.unhalted_read.range(..=addr).next_back() {
             if addr + 4 < range.0 + range.1 {
                 let mut core = self.session.core(0)?;
-                return Ok(core.read_word_32(addr)?);
+                return Ok(core.read_word_32(addr.try_into().unwrap())?);
             }
         }
 
         self.halt_and_read(|core| {
-            rval = core.read_word_32(addr)?;
+            rval = core.read_word_32(addr.try_into().unwrap())?;
             Ok(())
         })?;
 
@@ -273,11 +273,11 @@ impl Core for ProbeCore {
         if let Some(range) = self.unhalted_read.range(..=addr).next_back() {
             if addr + (data.len() as u64) < range.0 + range.1 {
                 let mut core = self.session.core(0)?;
-                return Ok(core.read_8(addr, data)?);
+                return Ok(core.read_8(addr.try_into().unwrap(), data)?);
             }
         }
 
-        self.halt_and_read(|core| Ok(core.read_8(addr, data)?))
+        self.halt_and_read(|core| Ok(core.read_8(addr.try_into().unwrap(), data)?))
     }
 
     fn read_reg(&mut self, reg: Register) -> Result<u64> {
@@ -288,7 +288,7 @@ impl Core for ProbeCore {
 
         Ok(core.read_core_reg(Into::<probe_rs::CoreRegisterAddress>::into(
             reg_id,
-        ))?)
+        ))? as u64)
     }
 
     fn write_reg(&mut self, reg: Register, value: u64) -> Result<()> {
@@ -299,7 +299,7 @@ impl Core for ProbeCore {
 
         core.write_core_reg(
             Into::<probe_rs::CoreRegisterAddress>::into(reg_id),
-            value,
+            value.try_into().unwrap(),
         )?;
 
         Ok(())
@@ -307,13 +307,13 @@ impl Core for ProbeCore {
 
     fn write_word_32(&mut self, addr: u64, data: u32) -> Result<()> {
         let mut core = self.session.core(0)?;
-        core.write_word_32(addr, data)?;
+        core.write_word_32(addr.try_into().unwrap(), data)?;
         Ok(())
     }
 
     fn write_8(&mut self, addr: u64, data: &[u8]) -> Result<()> {
         let mut core = self.session.core(0)?;
-        core.write_8(addr, data)?;
+        core.write_8(addr.try_into().unwrap(), data)?;
         Ok(())
     }
 
@@ -570,7 +570,7 @@ impl Core for OpenOCDCore {
         self.op_start()?;
         let result = self.sendcmd(&format!("mrw 0x{:x}", addr))?;
         self.op_done()?;
-        Ok(result.parse::<u64>()?)
+        Ok(result.parse::<u32>()?)
     }
 
     fn read_8(&mut self, addr: u64, data: &mut [u8]) -> Result<()> {
@@ -1059,7 +1059,7 @@ impl Core for GDBCore {
     fn read_word_32(&mut self, addr: u64) -> Result<u32> {
         let mut data = [0; 4];
         self.read_8(addr, &mut data)?;
-        Ok(u64::from_le_bytes(data))
+        Ok(u32::from_le_bytes(data))
     }
 
     fn read_8(&mut self, addr: u64, data: &mut [u8]) -> Result<()> {
@@ -1237,7 +1237,7 @@ impl Core for DumpCore {
 
                 self.check_offset(addr, rsize, offs)?;
 
-                return Ok(u64::from_le_bytes(
+                return Ok(u32::from_le_bytes(
                     self.contents[offs..offs + rsize].try_into().unwrap(),
                 ));
             }

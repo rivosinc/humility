@@ -269,7 +269,7 @@ pub struct HubrisArchive {
     loaded: BTreeMap<u64, HubrisRegion>,
 
     // current object
-    current: u32,
+    current: u64,
 
     // Capstone library handle
     cs: Option<capstone::Capstone>,
@@ -279,10 +279,10 @@ pub struct HubrisArchive {
     pub instrs: HashMap<u64, (Vec<u8>, Option<HubrisTarget>)>,
 
     // Manual stack pushes before a syscall
-    syscall_pushes: HashMap<u32, Option<Vec<Register>>>,
+    syscall_pushes: HashMap<u64, Option<Vec<Register>>>,
 
     // Current registers (if a dump)
-    registers: HashMap<Register, u32>,
+    registers: HashMap<Register, u64>,
 
     // Modules: text address to module
     modules: BTreeMap<u64, HubrisModule>,
@@ -303,10 +303,10 @@ pub struct HubrisArchive {
     esyms: BTreeMap<u64, (String, u64)>,
 
     // ELF symbols: name to value/length
-    esyms_byname: MultiMap<String, (UhSize, u64)>,
+    esyms_byname: MultiMap<String, (u64, u64)>,
 
     // Inlined: address/nesting tuple to length/goff/origin tuple
-    inlined: BTreeMap<(u64, isize), (u32, HubrisGoff, HubrisGoff)>,
+    inlined: BTreeMap<(u64, isize), (u64, HubrisGoff, HubrisGoff)>,
 
     // Subprograms: goff to demangled name
     subprograms: HashMap<HubrisGoff, String>,
@@ -455,7 +455,7 @@ impl HubrisArchive {
 
             if let Some(func) = self.subprograms.get(origin) {
                 inlined.push(HubrisInlined {
-                    addr: *addr as u32,
+                    addr: *addr,
                     name: func,
                     id: *goff,
                     origin: *origin,
@@ -1019,8 +1019,8 @@ impl HubrisArchive {
                         }
 
                         dwarf_location = Some((
-                            base_addr as u32,
-                            (next_addr - base_addr) as u32,
+                            base_addr,
+                            (next_addr - base_addr),
                         ));
                     }
                 }
@@ -1037,7 +1037,7 @@ impl HubrisArchive {
 
             if let Some(syms) = self.esyms_byname.get_vec(linkage) {
                 for &(addr, size) in syms {
-                    if let btree_map::Entry::Vacant(e) = self.dsyms.entry(addr.base)
+                    if let btree_map::Entry::Vacant(e) = self.dsyms.entry(addr)
                     {
                         e.insert(HubrisSymbol {
                             name: String::from(name),
@@ -1810,11 +1810,11 @@ impl HubrisArchive {
         // it won't flag an error -- it will simply stop short.  Check to see
         // if we are in this case and explicitly fail.
         //
-        if last.0 + last.1 != addr + buffer.len() {
+        if last.0 + last.1 as u64 != addr + buffer.len() as u64 {
             bail!(
                 "short disassembly for {} in {}: \
                 stopped at 0x{:x}, expected to go to 0x{:x}",
-                func, object, last.0, addr + buffer.len()
+                func, object, last.0, addr + buffer.len() as u64
             );
         }
 
@@ -1959,7 +1959,7 @@ impl HubrisArchive {
 
             self.esyms_byname
                 .insert(name.to_string(), (val, sym.st_size));
-            self.esyms.insert(val.base, (dem, sym.st_size));
+            self.esyms.insert(val, (dem, sym.st_size));
 
             if sym.is_function() {
                 let o = ((val - textsec.sh_addr) + offset) as usize;
@@ -2541,17 +2541,29 @@ impl HubrisArchive {
     }
 
     fn load_registers(&mut self, r: &[u8]) -> Result<()> {
+        let bpw = self.arch.as_ref().unwrap().get_bytes_per_word();
+
         if r.len() % 8 != 0 {
             bail!("bad length {} in registers note", r.len());
         }
 
-        for (i, chunk) in r.chunks_exact(8).enumerate() {
-            let (id, val) = chunk.split_at(4);
+        for (i, chunk) in r.chunks_exact(bpw * 2).enumerate() {
+            let (id, val) = chunk.split_at(bpw);
+
             // We unwrap here because it can only fail if the length is wrong,
             // but we've explicitly broken a chunk of 8 into two chunks of 4,
             // so a failure here would mean this code has been changed.
-            let id = u32::from_le_bytes(id.try_into().unwrap());
-            let val = u32::from_le_bytes(val.try_into().unwrap());
+            let (id, val) = match self.arch.as_ref().unwrap().get_bytes_per_word() {
+                4 => {
+                    (u32::from_le_bytes(id.try_into().unwrap()),
+                    u32::from_le_bytes(val.try_into().unwrap()) as u64)
+                }
+                8 => {
+                    // we downcast here since register id is always a u32
+                    (u64::from_le_bytes(id.try_into().unwrap()) as u32,
+                    u64::from_le_bytes(val.try_into().unwrap()))
+                }
+            };
 
             let reg = match self.arch.as_ref().unwrap().register_from_id(id) {
                 Ok(r) => r,
@@ -2798,6 +2810,8 @@ impl HubrisArchive {
         self.tasks.iter().find(|(_, &i)| i == index).map(|(name, _)| &**name)
     }
 
+    //
+    // TODO will need to change to readword_64
     pub fn task_table(
         &self,
         core: &mut dyn crate::core::Core,
@@ -2816,10 +2830,10 @@ impl HubrisArchive {
                 .read_word_32(base)
                 .context("failed to read TASK_TABLE_BASE")?;
 
-            Ok((base, size))
+            Ok((base as u64, size as u64))
         } else if let Ok(t) = self.lookup_variable("HUBRIS_TASK_TABLE_SPACE") {
             let task = self.lookup_struct_byname("Task")?;
-            Ok((t.addr, (t.size / task.size)))
+            Ok((t.addr as u64, (t.size / task.size) as u64))
         } else {
             bail!(
                 "could not find task table as \
@@ -2921,7 +2935,7 @@ impl HubrisArchive {
 
         let (_, n) = self.task_table(core)?;
 
-        if n == ntasks as u32 {
+        if n == ntasks as u64 {
             return Ok(());
         }
 
@@ -2946,7 +2960,7 @@ impl HubrisArchive {
         );
     }
 
-    pub fn image_id_addr(&self) -> Option<u32> {
+    pub fn image_id_addr(&self) -> Option<u64> {
         self.imageid.as_ref().map(|i| i.0)
     }
 
@@ -2958,7 +2972,7 @@ impl HubrisArchive {
         &self,
         structure: &HubrisStruct,
         member: &str,
-    ) -> Result<u32> {
+    ) -> Result<u64> {
         let mut s = structure;
         let mut offset = 0;
 
@@ -3018,7 +3032,7 @@ impl HubrisArchive {
             }
         }
 
-        Ok(offset as u32)
+        Ok(offset as u64)
     }
 
     //
@@ -3027,7 +3041,7 @@ impl HubrisArchive {
     fn task_region_descs(
         &self,
         core: &mut dyn crate::core::Core,
-    ) -> Result<Vec<Vec<u32>>> {
+    ) -> Result<Vec<Vec<u64>>> {
         let mut rval = vec![];
 
         //
@@ -3072,9 +3086,9 @@ impl HubrisArchive {
                 for i in 0..self.ntasks() {
                     let mut r = vec![];
 
-                    let taddr = tdescs.addr + ((i * tdesc.size) + roffs) as u32;
+                    let taddr = tdescs.addr + ((i * tdesc.size) + roffs) as u64;
 
-                    if taddr + count as u32 > tdescs.addr + tdescs.size as u32 {
+                    if taddr + count as u64 > tdescs.addr + tdescs.size as u64{
                         bail!("task {} has bad regions addr 0x{:x}", i, taddr);
                     }
 
@@ -3094,7 +3108,7 @@ impl HubrisArchive {
                             bail!("task {} has bad region index {}", i, ndx);
                         }
 
-                        r.push(rdescs.addr + (ndx * rdesc.size) as u32);
+                        r.push(rdescs.addr + (ndx * rdesc.size) as u64);
                     }
 
                     rval.push(r);
@@ -3111,12 +3125,13 @@ impl HubrisArchive {
                 for i in 0..self.ntasks() {
                     let mut r = vec![];
 
-                    let addr = base + i as u32 * task.size as u32;
-                    let ptr = core.read_word_32(addr + poffs)?;
-                    let len = core.read_word_32(addr + loffs)?;
+                    let addr = base + i as u64 * task.size as u64;
+                    let ptr = core.read_word_32(addr + poffs)? as u64;
+                    let len = core.read_word_32(addr + loffs)? as u64;
+                    //TODO will need u64 for pointer
 
                     for j in 0..len {
-                        r.push(core.read_word_32(ptr + j * 4)?);
+                        r.push(core.read_word_32(ptr + j * 4)? as u64);
                     }
 
                     rval.push(r);
@@ -3146,7 +3161,7 @@ impl HubrisArchive {
         const DEVICE: u32 = 1 << 3;
         const DMA: u32 = 1 << 4;
 
-        let mut regions: BTreeMap<u32, HubrisRegion> = BTreeMap::new();
+        let mut regions: BTreeMap<u64, HubrisRegion> = BTreeMap::new();
 
         //
         // Add our loaded kernel regions, which don't otherwise have
@@ -3226,9 +3241,10 @@ impl HubrisArchive {
         //
         for (i, daddrs) in self.task_region_descs(core)?.iter().enumerate() {
             for daddr in daddrs {
-                let base = core.read_word_32(daddr + base_offs)?;
-                let size = core.read_word_32(daddr + size_offs)?;
-                let attr = core.read_word_32(daddr + attr_offs)?;
+                // TODO 64bit addrs
+                let base = core.read_word_32(daddr + base_offs)? as u64;
+                let size = core.read_word_32(daddr + size_offs)? as u64;
+                let attr = core.read_word_32(daddr + attr_offs)? as u64;
 
                 if base == 0 {
                     continue;
@@ -3264,7 +3280,7 @@ impl HubrisArchive {
         Ok(regions)
     }
 
-    pub fn dump_registers(&self) -> HashMap<Register, u32> {
+    pub fn dump_registers(&self) -> HashMap<Register, u64> {
         self.registers.clone()
     }
 
@@ -3272,10 +3288,10 @@ impl HubrisArchive {
         &self,
         core: &mut dyn crate::core::Core,
         t: HubrisTask,
-    ) -> Result<BTreeMap<Register, u32>> {
+    ) -> Result<BTreeMap<Register, u64>> {
         let (base, _) = self.task_table(core)?;
         let cur =
-            core.read_word_32(self.lookup_symword("CURRENT_TASK_PTR")?)?;
+            core.read_word_32(self.lookup_symword("CURRENT_TASK_PTR")?)? as u64;
 
         let module = self.lookup_module(t)?;
         let mut rval = BTreeMap::new();
@@ -3288,13 +3304,13 @@ impl HubrisArchive {
         };
 
         let task = self.lookup_struct_byname("Task")?;
-        let save = task.lookup_member("save")?.offset as u32;
+        let save = task.lookup_member("save")?.offset;
         let state = self.lookup_struct_byname("SavedState")?;
 
         let mut regs: Vec<u8> = vec![];
         regs.resize_with(state.size, Default::default);
 
-        let offset = base + (ndx * task.size as u32) + save;
+        let offset = base + (ndx * task.size as u64) + save;
         core.read_8(offset, regs.as_mut_slice())?;
 
         //
@@ -3608,7 +3624,7 @@ impl HubrisArchive {
 
     pub fn explain(
         &self,
-        regions: &BTreeMap<u32, HubrisRegion>,
+        regions: &BTreeMap<u64, HubrisRegion>,
         val: u32,
     ) -> Option<String> {
         //
@@ -3646,6 +3662,9 @@ impl HubrisArchive {
         })
     }
 
+    //
+    // TODO 64bit support
+    //
     pub fn dump(
         &self,
         core: &mut dyn crate::core::Core,
@@ -3749,7 +3768,7 @@ impl HubrisArchive {
 
         file.iowrite_with(header, ctx)?;
 
-        let mut bytes = [0x0u8; goblin::elf32::program_header::SIZEOF_PHDR];
+        let mut bytes = [0x0u8; goblin::elf::program_header::SIZEOF_PHDR];
 
         //
         // Write our program headers, starting with our note headers.
@@ -3757,7 +3776,7 @@ impl HubrisArchive {
         for note in &notes {
             let size = notesz(note);
 
-            let phdr = goblin::elf32::program_header::ProgramHeader {
+            let phdr = goblin::elf::program_header::ProgramHeader {
                 p_type: goblin::elf::program_header::PT_NOTE,
                 p_flags: goblin::elf::program_header::PF_R,
                 p_offset: offset,
@@ -3778,7 +3797,7 @@ impl HubrisArchive {
                 continue;
             }
 
-            let seg_phdr = goblin::elf32::program_header::ProgramHeader {
+            let seg_phdr = goblin::elf::program_header::ProgramHeader {
                 p_type: goblin::elf::program_header::PT_LOAD,
                 p_flags: goblin::elf::program_header::PF_R,
                 p_offset: offset,
@@ -3798,7 +3817,7 @@ impl HubrisArchive {
             //
             // Now write our note section, starting with our note header...
             //
-            let mut bytes = [0x0u8; size_of::<goblin::elf::note::Nhdr32>()];
+            let mut bytes = [0x0u8; size_of::<goblin::elf::note::Note>()];
             bytes.pwrite_with(note, 0, ctx.le)?;
             file.write_all(&bytes)?;
 
@@ -4134,7 +4153,7 @@ impl HubrisArchive {
         Ok(rval)
     }
 
-    pub fn lookup_peripheral(&self, name: &str) -> Result<u32> {
+    pub fn lookup_peripheral(&self, name: &str) -> Result<u64> {
         ensure!(
             !self.modules.is_empty(),
             "Hubris archive required to specify a peripheral"
@@ -4332,7 +4351,7 @@ impl From<HubrisGoff> for HubrisTask {
 /// object.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone)]
 pub struct HubrisGoff {
-    pub object: u32,
+    pub object: u64,
     pub goff: usize,
 }
 
@@ -4454,7 +4473,7 @@ pub struct HubrisRegionAttr {
 #[derive(Clone, Debug)]
 pub struct HubrisRegion {
     /// Address of description in kernel RAM
-    pub daddr: Option<u32>,
+    pub daddr: Option<u64>,
 
     /// Base address of region
     pub base: u64,
@@ -4794,7 +4813,7 @@ impl HubrisSrc {
 #[derive(Clone, Debug)]
 pub struct HubrisModule {
     pub name: String,
-    pub object: u32,
+    pub object: u64,
     pub task: HubrisTask,
     pub textbase: u64,
     pub textsize: u64,
