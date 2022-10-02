@@ -175,7 +175,7 @@ impl Arch for RVArch {
         state: &HubrisStruct,
         _hubris: &HubrisArchive,
         _core: &mut dyn crate::core::Core,
-    ) -> Result<BTreeMap<Register, u32>> {
+    ) -> Result<BTreeMap<Register, u64>> {
         //
         // Load all of the saved regs found in the structure.
         // On riscv, every register gets saved
@@ -185,7 +185,8 @@ impl Arch for RVArch {
         for reg in get_all_registers() {
             log::trace!("reading reg: {}", reg);
             let rname = reg.to_string().to_lowercase();
-            let val = readreg(&rname, regs, state);
+            // TODO replace readreg
+            let val = readreg(&rname, regs, state) as u64;
             if val.is_err() {
                 continue;
             }

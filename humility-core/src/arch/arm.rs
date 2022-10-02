@@ -289,7 +289,7 @@ impl Arch for ARMArch {
         state: &HubrisStruct,
         hubris: &HubrisArchive,
         core: &mut dyn crate::core::Core,
-    ) -> Result<BTreeMap<Register, u32>> {
+    ) -> Result<BTreeMap<Register, u64>> {
         let mut rval = BTreeMap::new();
         //
         // Load all of the syscall regs found in the structure.
@@ -355,7 +355,7 @@ impl Arch for ARMArch {
 
         rval.insert(Register::Arm(ARMRegister::SP), sp + adjust);
 
-        Ok(rval)
+        Ok(rval as u64)
     }
 
     fn make_capstone(&self) -> Result<Capstone> {

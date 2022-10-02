@@ -82,7 +82,7 @@ pub trait Arch {
         state: &HubrisStruct,
         hubris: &HubrisArchive,
         core: &mut dyn crate::core::Core,
-    ) -> Result<BTreeMap<Register, u32>>;
+    ) -> Result<BTreeMap<Register, u64>>;
 
     fn make_capstone(&self) -> Result<Capstone>;
 

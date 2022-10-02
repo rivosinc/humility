@@ -3145,7 +3145,7 @@ impl HubrisArchive {
     pub fn regions(
         &self,
         core: &mut dyn crate::core::Core,
-    ) -> Result<BTreeMap<u32, HubrisRegion>> {
+    ) -> Result<BTreeMap<u64, HubrisRegion>> {
         let desc = self.lookup_struct_byname("RegionDesc")?;
 
         let base_offs = self.member_offset(desc, "base")?;
@@ -3244,7 +3244,7 @@ impl HubrisArchive {
                 // TODO 64bit addrs
                 let base = core.read_word_32(daddr + base_offs)? as u64;
                 let size = core.read_word_32(daddr + size_offs)? as u64;
-                let attr = core.read_word_32(daddr + attr_offs)? as u64;
+                let attr = core.read_word_32(daddr + attr_offs)?;
 
                 if base == 0 {
                     continue;
@@ -3304,7 +3304,7 @@ impl HubrisArchive {
         };
 
         let task = self.lookup_struct_byname("Task")?;
-        let save = task.lookup_member("save")?.offset;
+        let save = task.lookup_member("save")?.offset as u64;
         let state = self.lookup_struct_byname("SavedState")?;
 
         let mut regs: Vec<u8> = vec![];
@@ -3346,7 +3346,7 @@ impl HubrisArchive {
                 .arch
                 .as_ref()
                 .unwrap()
-                .read_saved_task_regs(&regs, state, self, core)?,
+                .read_saved_task_regs(&regs, state, self, core),
         );
         Ok(rval)
     }
@@ -3360,7 +3360,7 @@ impl HubrisArchive {
         core: &mut dyn crate::core::Core,
         task: HubrisTask,
         limit: u32,
-        regs: &BTreeMap<Register, u32>,
+        regs: &BTreeMap<Register, u64>,
     ) -> Result<Vec<HubrisStackFrame>> {
         let regions = self.regions(core)?;
         let sp = regs
@@ -3395,7 +3395,10 @@ impl HubrisArchive {
             }
 
             let o = (addr - region.base) as usize;
-            Ok(u32::from_le_bytes(buf[o..o + 4].try_into().unwrap()))
+            match self.arch.as_ref().unwrap().bytes_per_word() {
+                4 => Ok(u32::from_le_bytes(buf[o..o + 4].try_into().unwrap()) as u64)
+                8 => Ok(u64::from_le_bytes(buf[o..o + 8].try_into().unwrap()))
+            }
         };
 
         //
@@ -3405,7 +3408,7 @@ impl HubrisArchive {
         // see jira https://rivosinc.atlassian.net/browse/SW-23
         if let Some(Some(pushed)) = self.syscall_pushes.get(pc) {
             for (i, &p) in pushed.iter().enumerate() {
-                let val = readval(sp + (i * 4) as u32)?;
+                let val = readval(sp + (i * 4))?;
                 frameregs.insert(p, val);
             }
 
@@ -3768,7 +3771,7 @@ impl HubrisArchive {
 
         file.iowrite_with(header, ctx)?;
 
-        let mut bytes = [0x0u8; goblin::elf::program_header::SIZEOF_PHDR];
+        let mut bytes = [0x0u8; goblin::elf64::program_header::SIZEOF_PHDR];
 
         //
         // Write our program headers, starting with our note headers.
@@ -4304,7 +4307,7 @@ impl HubrisArchive {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum HubrisTask {
     Kernel,
-    Task(u32),
+    Task(u64),
 }
 
 impl HubrisTask {
@@ -4318,7 +4321,7 @@ impl HubrisTask {
     ///
     /// # Panics
     /// Panics if this is `HubrisTask::Kernel`
-    pub fn task(&self) -> u32 {
+    pub fn task(&self) -> u64 {
         if let HubrisTask::Task(u) = self {
             *u
         } else {
