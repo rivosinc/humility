@@ -2803,7 +2803,7 @@ impl HubrisArchive {
     }
 
     pub fn task_name(&self, index: usize) -> Option<&str> {
-        let index = HubrisTask::Task(index as u32);
+        let index = HubrisTask::Task(index);
         // TODO this is super gross but we don't have the inverse of the tasks
         // mapping at the moment.
         // TODO did fawaz add this
@@ -3266,11 +3266,11 @@ impl HubrisArchive {
                         device: attr & DEVICE != 0,
                         dma: attr & DMA != 0,
                     },
-                    tasks: vec![HubrisTask::Task(i as u32)],
+                    tasks: vec![HubrisTask::Task(i)],
                 };
 
                 if let Some(existing) = regions.get_mut(&base) {
-                    existing.tasks.push(HubrisTask::Task(i as u32));
+                    existing.tasks.push(HubrisTask::Task(i));
                 } else {
                     regions.insert(base, region);
                 }
@@ -3346,7 +3346,7 @@ impl HubrisArchive {
                 .arch
                 .as_ref()
                 .unwrap()
-                .read_saved_task_regs(&regs, state, self, core),
+                .read_saved_task_regs(&regs, state, self, core)?,
         );
         Ok(rval)
     }
@@ -3396,8 +3396,8 @@ impl HubrisArchive {
 
             let o = (addr - region.base) as usize;
             match self.arch.as_ref().unwrap().bytes_per_word() {
-                4 => Ok(u32::from_le_bytes(buf[o..o + 4].try_into().unwrap()) as u64)
-                8 => Ok(u64::from_le_bytes(buf[o..o + 8].try_into().unwrap()))
+                4 => Ok(u32::from_le_bytes(buf[o..o + 4].try_into().unwrap()) as u64),
+                8 => Ok(u64::from_le_bytes(buf[o..o + 8].try_into().unwrap())),
             }
         };
 
@@ -3408,13 +3408,13 @@ impl HubrisArchive {
         // see jira https://rivosinc.atlassian.net/browse/SW-23
         if let Some(Some(pushed)) = self.syscall_pushes.get(pc) {
             for (i, &p) in pushed.iter().enumerate() {
-                let val = readval(sp + (i * 4))?;
+                let val = readval(sp + (i as u64 * 4))?;
                 frameregs.insert(p, val);
             }
 
             frameregs.insert(
                 self.arch.as_ref().unwrap().get_sp(),
-                sp + (pushed.len() * 4) as u32,
+                sp + (pushed.len() * 4),
             );
         }
 
@@ -3453,7 +3453,7 @@ impl HubrisArchive {
                         .unwrap()
                         .register_from_dwarf_id(register.0.into())
                     {
-                        *frameregs.get(&reg).unwrap() + *offset as u32
+                        *frameregs.get(&reg).unwrap() + *offset as u64
                     } else {
                         // A register we don't model -- that's OK.
                         continue;

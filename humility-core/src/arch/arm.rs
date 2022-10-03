@@ -353,9 +353,9 @@ impl Arch for ARMArch {
         let adjust =
             (nregs_frame as u32) * 4 + ARMArch::exception_stack_realign(&rval);
 
-        rval.insert(Register::Arm(ARMRegister::SP), sp + adjust);
+        rval.insert(Register::Arm(ARMRegister::SP), (sp + adjust) as u64);
 
-        Ok(rval as u64)
+        Ok(rval)
     }
 
     fn make_capstone(&self) -> Result<Capstone> {

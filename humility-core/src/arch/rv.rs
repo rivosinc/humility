@@ -186,11 +186,11 @@ impl Arch for RVArch {
             log::trace!("reading reg: {}", reg);
             let rname = reg.to_string().to_lowercase();
             // TODO replace readreg
-            let val = readreg(&rname, regs, state) as u64;
+            let val = readreg(&rname, regs, state);
             if val.is_err() {
                 continue;
             }
-            let val = val.unwrap();
+            let val = val.unwrap() as u64;
 
             rval.insert(reg, val);
         }
