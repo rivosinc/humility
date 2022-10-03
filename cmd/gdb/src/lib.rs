@@ -191,7 +191,12 @@ pub fn gdb(
     cmd.arg("-q").arg("-x").arg("script.gdb").arg("-x").arg("openocd.gdb");
     if subargs.load {
         // start the process but immediately halt the processor
-        cmd.arg("-ex").arg("load").arg("-ex").arg("stepi");
+        cmd.arg("-ex")
+            .arg("load")
+            .arg("-ex")
+            .arg("stepi")
+            .arg("-ex")
+            .arg("set radix 16");
     }
     cmd.arg("final.elf");
     cmd.current_dir(work_dir.path());
