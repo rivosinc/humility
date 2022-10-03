@@ -36,13 +36,11 @@ rustPlatform.buildRustPackage rec {
   #  qemu
   ];
 
-  # buildPhase = ''
-  #  ${cargo}/bin/cargo build
-  # '';
-
-  # installPhase = ''
-  #   ${cargo}/bin/cargo install --path .
-  # '';
+  checkPhase = ''
+    ${cargo}/bin/cargo fmt --all --check
+    ${cargo}/bin/cargo clippy --profile=ci -- -D warnings
+    ${cargo}/bin/cargo test
+  '';
 
   meta = with lib; {
     description = "Humility is the debugger for Hubris";

@@ -10,7 +10,7 @@
     rust-overlay,
     flake-utils,
   }:
-    flake-utils.lib.eachDefaultSystem (system: let
+    (flake-utils.lib.eachDefaultSystem (system: let
 
       overlays = [ (import rust-overlay) ];
 
@@ -26,7 +26,7 @@
         humility = final.callPackage ./default.nix {
           cargo = rust;
           src = self;
-          version = "0.8.0";
+          version = "0.8.10";
         };
       };
   
@@ -38,12 +38,6 @@
 
 
     in {
-      # TODO this need some work so it is tucked under a system derivation
-      overlays = {
-        default = humility-overlay;
-        inherit humility-overlay;
-      };
-
       packages = flake-utils.lib.flattenTree {
         humility = humility-pkgs.humility;
       };
@@ -59,9 +53,15 @@
 
         nativeBuildInputs = with pkgs; [
           rust
+          cargo-readme
           openocd
           libusb1
         ] ++ lib.optionals pkgs.stdenv.isLinux[ pkgs.systemd ];
       };
-    });
+
+      checks = {
+          humility = humility-pkgs.humility.override { doCheck = true; };
+      };
+
+    }));
 }
