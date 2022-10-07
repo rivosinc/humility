@@ -7,8 +7,6 @@
   systemd ? null,
   libusb1,
   cargo-readme,
-  openocd,
-  qemu,
   src,
   version,
   doCheck ? false,
@@ -18,7 +16,7 @@ rustPlatform.buildRustPackage rec {
 
   name = "humility";
 
-  cargoSha256 = "sha256-/ez7pOAqkOlYnkE7mSoAzcErctpgbstqym0rlAsvqVw";
+  cargoSha256 = "sha256-Sjk1XkpRA8eVucgRcY0OFyaNs1wvnBhaCt6yF2E1Xdw";
 
   nativeBuildInputs = [
     pkg-config
@@ -30,11 +28,6 @@ rustPlatform.buildRustPackage rec {
     libusb1
     cargo-readme
   ] ++ lib.optionals stdenv.isLinux [ systemd ];
-
-  propagatedBuildInputs = [
-  #  openocd
-  #  qemu
-  ];
 
   checkPhase = ''
     ${cargo}/bin/cargo fmt --all --check

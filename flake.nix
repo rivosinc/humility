@@ -1,5 +1,5 @@
 {
-  description = "Flake shell to open Hubris and Humility dev environment";
+  description = "Flake shell to open Humility dev environment";
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   inputs.rust-overlay.url = "github:oxalica/rust-overlay";
   inputs.flake-utils.url = "github:numtide/flake-utils";
@@ -23,7 +23,7 @@
       humility-overlay = final: prev: {
         cargo = rust;
         rustc = rust;
-        humility = final.callPackage ./default.nix {
+        humility = final.callPackage ./humility.nix {
           cargo = rust;
           src = self;
           version = "0.8.10";
@@ -40,11 +40,10 @@
     in {
       packages = flake-utils.lib.flattenTree {
         humility = humility-pkgs.humility;
+        default = humility-pkgs.humility;
       };
 
-      defaultPackage = humility-pkgs.humility;
-
-      devShell = pkgs.mkShell {
+      devShells.default = pkgs.mkShell {
 
         shellHook = ''
           export CARGO_HOME=$(pwd)/.cargo
