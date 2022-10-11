@@ -1,1 +1,6 @@
 /target
+result
+.cargo/.package-cache
+.cargo/git/
+.cargo/registry/
+
