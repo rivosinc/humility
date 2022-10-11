@@ -434,6 +434,7 @@ fn explain_sched_state(
 
     match e {
         SchedState::Stopped => print!("not started"),
+        SchedState::Exited => print!("EXITED"),
         SchedState::Runnable => {
             if current {
                 print!("RUNNING")
