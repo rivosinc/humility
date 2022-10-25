@@ -1,6 +1,6 @@
 system time = 54898
-ID TASK                 GEN PRI STATE    
- 0 jefe                   0   0 recv, notif: bit0 bit1(T+2)
+ID TASK                       GEN PRI STATE    
+ 0 jefe                         0   0 recv, notif: bit0 bit1(T+2)
    stack unwind failed: task Task(0) not present in image 
    |
    +--->   PC = 0x20015f8e   RA = 0x2001459a   SP = 0x80000c90   GP = 0x80000c00
@@ -63,7 +63,7 @@ ID TASK                 GEN PRI STATE
                     descriptor: 0x200135e0 (&abi::TaskDesc)
                 }
 
- 1 pong                   0   3 ready
+ 1 pong                         0   3 ready
    stack unwind failed: task Task(1) not present in image 
    |
    +--->   PC = 0x200178f2   RA = 0x20017850   SP = 0x80001580   GP = 0x00000000
@@ -126,7 +126,7 @@ ID TASK                 GEN PRI STATE
                     descriptor: 0x200135f4 (&abi::TaskDesc)
                 }
 
- 2 ping               23291   4 wait: reply from pong/gen0
+ 2 ping                     23291   4 wait: reply from pong/gen0
    stack unwind failed: task Task(2) not present in image 
    |
    +--->   PC = 0x20018698   RA = 0x20017a78   SP = 0x80001180   GP = 0x00000000
@@ -189,7 +189,7 @@ ID TASK                 GEN PRI STATE
                     descriptor: 0x20013608 (&abi::TaskDesc)
                 }
 
- 3 idle                   0   5 ready
+ 3 idle                         0   5 ready
    |
    +--->  0x80000fe0 0x20017720 _start
    |                 @ /hubris/sys/userlib/src/arch/riscv32.rs:20

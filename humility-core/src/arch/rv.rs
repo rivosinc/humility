@@ -23,11 +23,7 @@ pub struct RVArch {
 
 impl RVArch {
     pub fn new(ei_class: u8) -> Self {
-        if ei_class == goblin::elf::header::ELFCLASS32 {
-            Self { ei_class }
-        } else {
-            unimplemented!();
-        }
+        Self { ei_class }
     }
 }
 

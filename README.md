@@ -250,6 +250,7 @@ a specified target.  (In the above example, one could execute `humility
 - [humility openocd](#humility-openocd): Run OpenOCD for the given archive
 - [humility pmbus](#humility-pmbus): scan for and read PMBus devices
 - [humility pmp](#humility-pmp): print physical memory protection regions
+- [humility power](#humility-power): show power-related information
 - [humility probe](#humility-probe): probe for any attached devices
 - [humility qemu](#humility-qemu): Launch a qemu instance running the corresponding archive
 - [humility qspi](#humility-qspi): QSPI status, reading and writing
@@ -258,6 +259,7 @@ a specified target.  (In the above example, one could execute `humility
 - [humility registers](#humility-registers): print Hubris registers
 - [humility rencm](#humility-rencm): query Renesas 8A3400X ClockMatrix parts
 - [humility rendmp](#humility-rendmp): Renesas digital muliphase controller operations
+- [humility repl](#humility-repl): read, eval, print, loop
 - [humility reset](#humility-reset): Reset the chip using external pins
 - [humility resume](#humility-resume): Resume the chip using debug module
 - [humility ringbuf](#humility-ringbuf): read and display a specified ring buffer
@@ -1254,6 +1256,7 @@ will both run OpenOCD and run a foreground GDB that is connected to it.
 
 No documentation yet for `humility pmbus`; pull requests welcome!
 
+<<<<<<< HEAD
 ### `humility pmp`
 
 On riscv platforms the pmp is used to prevent umode access to certain memory regions.
@@ -1278,7 +1281,11 @@ pmpaddr06        0x0 -       0x1f      20 ----  NAPOT
 pmpaddr07        0x0 -       0x1f      20 ----  NAPOT
 ```
 
+### `humility power`
 
+`humility power` displays the values associated with devices that
+can measure voltage, displaying voltage, current (if measured) and
+temperature (if measured).
 
 ### `humility probe`
 
@@ -1798,6 +1805,59 @@ humility: image CRC (0x841f35a5) matches OTP CRC
 
 
 
+### `humility repl`
+
+`humility repl` is an interactive prompt that you can use with humility.
+
+This allows you to run several commands in succession without needing to type in some core settings
+over and over again.
+
+`humility repl` takes the same top level arguments as any other subcommand, and will remember them
+inside of the prompt. For example:
+
+```rust
+$ humility -a ../path/to/hubris/archive.zip repl
+humility: attached via ST-Link V2-1
+Welcome to the humility REPL! Try out some subcommands, or 'quit' to quit!
+humility> tasks
+system time = 7209837
+ID TASK                 GEN PRI STATE
+ 0 jefe                   0   0 recv, notif: bit0 bit1(T+63)
+ 1 rcc_driver             0   1 recv
+ 2 usart_driver           0   2 RUNNING
+ 3 user_leds              0   2 recv
+ 4 ping               47524   4 wait: reply from usart_driver/gen0
+ 5 pong                   0   3 recv, notif: bit0(T+163)
+ 6 hiffy                  0   3 notif: bit31(T+121)
+ 7 idle                   0   5 ready
+
+humility> tasks
+system time = 7212972
+ID TASK                 GEN PRI STATE
+ 0 jefe                   0   0 recv, notif: bit0 bit1(T+28)
+ 1 rcc_driver             0   1 recv
+ 2 usart_driver           0   2 recv, notif: bit0(irq38)
+ 3 user_leds              0   2 recv
+ 4 ping               47544   4 RUNNING
+ 5 pong                   0   3 recv, notif: bit0(T+28)
+ 6 hiffy                  0   3 notif: bit31(T+252)
+ 7 idle                   0   5 ready
+
+humility> quit
+Quitting!
+```
+
+As you can see, we can run the `tasks` subcommand twice, without passing our
+archive each time. In the output above, you can see the ping task faulting
+in the background; your code is still running in the background while you
+use the repl!
+
+Finally, as you can see, `quit` will quit the repl. There is also a `history`
+command, which will show you recent commands you've put into the prompt.
+
+The repl is still very early days! We'll be adding more features in the future.
+
+
 ### `humility reset`
 
 `humility reset` will hard reset the system using the debug pin
@@ -1917,15 +1977,18 @@ task, which includes MAC address and image ID (checked for compatibility).
 `Sensor` Idol interface to get sensor data.  If there is no `sensor` task
 or if there are no sensors defined in the in Hubris application
 description, this command will not provide any meaningful output. To list
-all available sensors, use `-l` (`--list`); to summarize sensor values,
-use `-s` (`--summarize`).  To constrain sensors by type, use the `-t`
-(`--types`) option; to constrain sensors by device, use the `-d`
-(`--devices`) option; to constrain sensors by name, use the `-n`
+all available sensors, use `-l` (`--list`).  To constrain sensors by type,
+use the `-t` (`--types`) option; to constrain sensors by device, use the
+`-d` (`--devices`) option; to constrain sensors by name, use the `-n`
 (`--named`) option.  Within each option, multiple specifications serve as
 a logical OR (that is, (`-d raa229618,tmp117` would yield all sensors from
 either device), but if multiple kinds of specifications are present, they
 serve as a logical AND (e.g., `-t thermal -d raa229618,tmp117` would yield
 all thermal sensors from either device).
+
+By default, `humility sensors` displays the value of each specified sensor
+and exits; to read values once per second, use the `-s` (`--sleep`)
+option. To print values as a table, use `--tabular`.
 
 
 ### `humility spctrl`

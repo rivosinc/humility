@@ -12,6 +12,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use clap::{Command as ClapCommand, CommandFactory, Parser};
 use colored::Colorize;
+use humility::cli::Subcommand;
 use indicatif::{ProgressBar, ProgressStyle};
 
 use humility::core::Core;
@@ -19,7 +20,7 @@ use humility::hubris::*;
 use humility_cmd::hiffy::HiffyContext;
 use humility_cmd::idol::IdolArgument;
 use humility_cmd::idol::IdolOperation;
-use humility_cmd::{Archive, Attach, Command, Run, Validate};
+use humility_cmd::{Archive, Attach, Command, Validate};
 use humility_cmd_hiffy::HiffyLease;
 
 const SLOT_SIZE_BYTES: usize = 1024 * 1024;
@@ -248,6 +249,7 @@ impl<'a> AuxFlashHandler<'a> {
             }
             bar.set_position(offset as u64);
         }
+        bar.set_position(out.len() as u64);
 
         Ok(out)
     }
@@ -341,6 +343,7 @@ impl<'a> AuxFlashHandler<'a> {
             }
             bar.set_position(offset as u64);
         }
+        bar.set_position(data.len() as u64);
         humility::msg!("done");
         Ok(())
     }
@@ -367,13 +370,13 @@ impl<'a> AuxFlashHandler<'a> {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-fn auxflash(
-    hubris: &HubrisArchive,
-    core: &mut dyn Core,
-    subargs: &[String],
-) -> Result<()> {
+fn auxflash(context: &mut humility::ExecutionContext) -> Result<()> {
+    let core = &mut **context.core.as_mut().unwrap();
+    let Subcommand::Other(subargs) = context.cli.cmd.as_ref().unwrap();
     let subargs = AuxFlashArgs::try_parse_from(subargs)?;
+    let hubris = context.archive.as_ref().unwrap();
     let mut worker = AuxFlashHandler::new(hubris, core, subargs.timeout)?;
+
     match subargs.cmd {
         AuxFlashCommand::Status { verbose } => {
             worker.auxflash_status(verbose)?;
@@ -407,7 +410,7 @@ pub fn init() -> (Command, ClapCommand<'static>) {
             archive: Archive::Required,
             attach: Attach::LiveOnly,
             validate: Validate::Booted,
-            run: Run::Subargs(auxflash),
+            run: auxflash,
         },
         AuxFlashArgs::command(),
     )

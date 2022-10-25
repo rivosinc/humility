@@ -20,10 +20,10 @@ use std::fs;
 use std::process::{Command, Stdio};
 
 use cmd_gdb::gdb;
-use humility::hubris::*;
-use humility_cmd::{Archive, Args, Command as HumilityCmd, RunUnattached};
+use humility::cli::Subcommand;
+use humility_cmd::{Archive, Command as HumilityCommand};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use clap::{Command as ClapCommand, CommandFactory, Parser};
 
 #[derive(Parser, Debug)]
@@ -44,15 +44,10 @@ struct QemuArgs {
     gdb: bool,
 }
 
-fn qemu(
-    hubris: &mut HubrisArchive,
-    args: &Args,
-    subargs: &[String],
-) -> Result<()> {
-    if args.probe.is_some() {
-        bail!("Cannot specify --probe with `qemu` subcommand");
-    }
+fn qemu(context: &mut humility::ExecutionContext) -> Result<()> {
+    let hubris = context.archive.as_ref().unwrap();
 
+    let Subcommand::Other(subargs) = context.cli.cmd.as_ref().unwrap();
     let subargs = QemuArgs::try_parse_from(subargs)?;
 
     //parse port from args, this is the port gdb-server will listen on
@@ -127,8 +122,7 @@ fn qemu(
         cmd.stdin(Stdio::piped());
         let _qemu = Runner(cmd.spawn().context("Could not start 'qemu'")?);
         // now start gdb
-        let emtpy_args: [String; 1] = ["--load".to_string()];
-        gdb(hubris, args, &emtpy_args)?;
+        gdb(context)?;
     } else {
         //turn off ctrl c, qemu can handle it
         ctrlc::set_handler(|| {}).expect("Error setting Ctrl-C handler");
@@ -141,12 +135,12 @@ fn qemu(
     Ok(())
 }
 
-pub fn init() -> (HumilityCmd, ClapCommand<'static>) {
+pub fn init() -> (HumilityCommand, ClapCommand<'static>) {
     (
-        HumilityCmd::Unattached {
+        HumilityCommand::Unattached {
             name: "qemu",
             archive: Archive::Required,
-            run: RunUnattached::Args(qemu),
+            run: qemu,
         },
         QemuArgs::command(),
     )

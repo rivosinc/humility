@@ -35,10 +35,11 @@
 use anyhow::{bail, Context, Result};
 use clap::Command as ClapCommand;
 use clap::{CommandFactory, Parser};
+use humility::cli::Subcommand;
 use humility::core::Core;
 use humility::hubris::*;
 use humility_cmd::attach_live;
-use humility_cmd::{Archive, Args, Command, RunUnattached};
+use humility_cmd::{Archive, Command};
 use humility_cortex::debug::*;
 use humility_cortex::dwt::*;
 use humility_cortex::itm::*;
@@ -58,32 +59,43 @@ struct ItmArgs {
         long, short, conflicts_with_all = &["enable", "disable", "ingest"]
     )]
     probe: bool,
+
     /// enable ITM on attached device
     #[clap(long, short, conflicts_with_all = &["disable", "ingest"])]
     enable: bool,
+
     /// disable ITM on attached device
     #[clap(long, short)]
     disable: bool,
+
     /// sets ITM trace identifier
     #[clap(
         long, short, default_value = "0x3a", value_name = "identifier",
         parse(try_from_str = parse_int::parse)
     )]
     traceid: u8,
+
     /// ingest ITM data as CSV
     #[clap(long, short, value_name = "filename")]
     ingest: Option<String>,
+
     /// ingest directly from attached device
     #[clap(long, short, conflicts_with_all = &["disable", "ingest"])]
     attach: bool,
+
     /// assume bypassed TPIU in ingested file
     #[clap(long, short, requires = "ingest")]
     bypass: bool,
+
     /// sets the value of SWOSCALER
     #[clap(long, short, value_name = "scaler", requires = "enable",
         parse(try_from_str = parse_int::parse),
     )]
     clockscaler: Option<u16>,
+
+    /// reset target
+    #[clap(long, short, requires = "attach")]
+    reset: bool,
 }
 
 fn itmcmd_probe(core: &mut dyn Core, coreinfo: &CoreInfo) -> Result<()> {
@@ -242,11 +254,10 @@ fn itmcmd_ingest_attached(
     )
 }
 
-fn itmcmd(
-    hubris: &mut HubrisArchive,
-    args: &Args,
-    subargs: &[String],
-) -> Result<()> {
+fn itmcmd(context: &mut humility::ExecutionContext) -> Result<()> {
+    let Subcommand::Other(subargs) = context.cli.cmd.as_ref().unwrap();
+    let hubris = context.archive.as_ref().unwrap();
+
     let subargs = &ItmArgs::try_parse_from(subargs)?;
     let mut rval = Ok(());
 
@@ -270,7 +281,7 @@ fn itmcmd(
     //
     // For all of the other commands, we need to actually attach to the chip.
     //
-    let mut c = attach_live(args, hubris)?;
+    let mut c = attach_live(&context.cli, hubris)?;
     let core = c.as_mut();
     hubris.validate(core, HubrisValidate::ArchiveMatch)?;
 
@@ -320,6 +331,11 @@ fn itmcmd(
     core.run()?;
     humility::msg!("core resumed");
 
+    if subargs.reset {
+        core.reset()?;
+        humility::msg!("core reset");
+    }
+
     if rval.is_ok() && subargs.attach {
         match itmcmd_ingest_attached(core, &coreinfo, subargs) {
             Err(e) => {
@@ -339,7 +355,7 @@ pub fn init() -> (Command, ClapCommand<'static>) {
         Command::Unattached {
             name: "itm",
             archive: Archive::Optional,
-            run: RunUnattached::Args(itmcmd),
+            run: itmcmd,
         },
         ItmArgs::command(),
     )
