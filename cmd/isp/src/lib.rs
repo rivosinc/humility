@@ -18,8 +18,8 @@ use anyhow::Result;
 use byteorder::ByteOrder;
 use clap::Command as ClapCommand;
 use clap::{CommandFactory, Parser};
-use humility::hubris::*;
-use humility_cmd::{Archive, Args, Command, Dumper};
+use humility::cli::Subcommand;
+use humility_cmd::{Archive, Command, Dumper};
 use serialport::{DataBits, FlowControl, Parity, StopBits};
 use std::io::Read;
 use std::path::PathBuf;
@@ -55,7 +55,15 @@ enum IspCmd {
         #[clap(parse(from_os_str))]
         file: PathBuf,
     },
+    /// Write a file to the CFPA region
+    WriteCFPA {
+        #[clap(parse(from_os_str))]
+        file: PathBuf,
+    },
+    /// Read the CMPA region
     ReadCMPA,
+    /// Read the CFPA regions (scratch, ping, pong)
+    ReadCFPA,
     /// Erase the CMPA region (use to boot non-secure binaries again)
     EraseCMPA,
     /// Put a minimalist program on to allow attaching via SWD
@@ -74,9 +82,7 @@ enum IspCmd {
     /// Erase existing keystore
     EraseKeyStore,
     /// Get Bootloader property
-    GetProperty {
-        prop: BootloaderProperty,
-    },
+    GetProperty { prop: BootloaderProperty },
     /// Get information about why the chip put itself in ISP mode
     LastError,
 }
@@ -218,11 +224,8 @@ fn pretty_print_bootloader_prop(prop: BootloaderProperty, params: Vec<u32>) {
     }
 }
 
-fn ispcmd(
-    _hubris: &mut HubrisArchive,
-    _args: &Args,
-    subargs: &[String],
-) -> Result<()> {
+fn ispcmd(context: &mut humility::ExecutionContext) -> Result<()> {
+    let Subcommand::Other(subargs) = context.cli.cmd.as_ref().unwrap();
     let subargs = IspArgs::try_parse_from(subargs)?;
 
     // The target _technically_ has autobaud but it's very flaky
@@ -279,6 +282,34 @@ fn ispcmd(
             crate::cmd::do_isp_write_memory(&mut *port, 0x9e400, bytes)?;
             println!("Write to CMPA done!");
         }
+        IspCmd::WriteCFPA { file } => {
+            let mut infile =
+                std::fs::OpenOptions::new().read(true).open(&file)?;
+
+            let mut bytes = Vec::new();
+
+            infile.read_to_end(&mut bytes)?;
+
+            crate::cmd::do_isp_write_memory(&mut *port, 0x9de00, bytes)?;
+            println!("Write to CFPA done!");
+        }
+        IspCmd::ReadCFPA => {
+            let m = crate::cmd::do_isp_read_memory(&mut *port, 0x9de00, 512)?;
+
+            let mut dumper = Dumper::new();
+            dumper.size = 4;
+            println!("=====Scratch Page=====");
+            dumper.dump(&m, 0x9de00);
+
+            let m = crate::cmd::do_isp_read_memory(&mut *port, 0x9e000, 512)?;
+
+            println!("=====Ping Page=====");
+            dumper.dump(&m, 0x9e000);
+
+            let m = crate::cmd::do_isp_read_memory(&mut *port, 0x9e200, 512)?;
+            println!("=====Pong Page=====");
+            dumper.dump(&m, 0x9e200);
+        }
         IspCmd::EraseCMPA => {
             // Write 512 bytes of zero
             let bytes = vec![0; 512];
@@ -291,7 +322,7 @@ fn ispcmd(
             let m = crate::cmd::do_isp_read_memory(&mut *port, 0x9e400, 512)?;
 
             let mut dumper = Dumper::new();
-            dumper.size = 512;
+            dumper.size = 4;
             dumper.dump(&m, 0x9e400);
         }
         IspCmd::Restore => {
@@ -388,7 +419,7 @@ pub fn init() -> (Command, ClapCommand<'static>) {
         Command::Unattached {
             name: "isp",
             archive: Archive::Ignored,
-            run: humility_cmd::RunUnattached::Args(ispcmd),
+            run: ispcmd,
         },
         IspArgs::command(),
     )

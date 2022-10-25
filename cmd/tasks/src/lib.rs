@@ -114,12 +114,13 @@
 use anyhow::{bail, Context, Result};
 use clap::Command as ClapCommand;
 use clap::{CommandFactory, Parser};
+use humility::cli::Subcommand;
 use humility::core::Core;
 use humility::hubris::*;
 use humility::reflect::{self, Format, Load};
 use humility::regs::Register;
 use humility_cmd::doppel::{self, Task, TaskDesc, TaskId, TaskState};
-use humility_cmd::{Archive, Attach, Command, Run, Validate};
+use humility_cmd::{Archive, Attach, Command, Validate};
 use std::collections::{BTreeMap, HashMap};
 
 #[derive(Parser, Debug)]
@@ -170,11 +171,11 @@ fn print_regs(regs: &BTreeMap<Register, u32>, additional: bool) {
 }
 
 #[rustfmt::skip::macros(println)]
-fn tasks(
-    hubris: &HubrisArchive,
-    core: &mut dyn Core,
-    subargs: &[String],
-) -> Result<()> {
+fn tasks(context: &mut humility::ExecutionContext) -> Result<()> {
+    let core = &mut **context.core.as_mut().unwrap();
+    let Subcommand::Other(subargs) = context.cli.cmd.as_ref().unwrap();
+    let hubris = context.archive.as_ref().unwrap();
+
     let subargs = TasksArgs::try_parse_from(subargs)?;
 
     let (base, task_count) = hubris.task_table(core)?;
@@ -274,7 +275,7 @@ fn tasks(
 
         println!("system time = {}", ticks);
 
-        println!("{:2} {:15} {:>8} {:3} {:9}",
+        println!("{:2} {:21} {:>8} {:3} {:9}",
             "ID", "TASK", "GEN", "PRI", "STATE");
 
         let mut any_names_truncated = false;
@@ -304,13 +305,13 @@ fn tasks(
 
             {
                 let mut modname = module.to_string();
-                if modname.len() > 14 {
-                    modname.truncate(14);
+                if modname.len() > 20 {
+                    modname.truncate(20);
                     modname.push('…');
                     any_names_truncated = true;
                 }
                 print!(
-                    "{:2} {:15} {:>8} {:3} ",
+                    "{:2} {:21} {:>8} {:3} ",
                     i,
                     modname,
                     u32::from(task.generation),
@@ -681,7 +682,7 @@ pub fn init() -> (Command, ClapCommand<'static>) {
             archive: Archive::Required,
             attach: Attach::Any,
             validate: Validate::Booted,
-            run: Run::Subargs(tasks),
+            run: tasks,
         },
         TasksArgs::command(),
     )

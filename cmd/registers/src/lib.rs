@@ -132,10 +132,10 @@
 use anyhow::{bail, Result};
 use clap::Command as ClapCommand;
 use clap::{CommandFactory, Parser};
-use humility::core::Core;
+use humility::cli::Subcommand;
 use humility::hubris::*;
 use humility::regs::{Register, RegisterField};
-use humility_cmd::{Archive, Attach, Command, Run, Validate};
+use humility_cmd::{Archive, Attach, Command, Validate};
 use humility_cortex::debug::*;
 use std::collections::BTreeMap;
 
@@ -232,13 +232,12 @@ fn print_reg(reg: Register, val: u32, fields: &[RegisterField]) {
     println!();
 }
 
-fn registers(
-    hubris: &HubrisArchive,
-    core: &mut dyn Core,
-    subargs: &[String],
-) -> Result<()> {
+fn registers(context: &mut humility::ExecutionContext) -> Result<()> {
+    let core = &mut **context.core.as_mut().unwrap();
+    let Subcommand::Other(subargs) = context.cli.cmd.as_ref().unwrap();
     let subargs = RegistersArgs::try_parse_from(subargs)?;
     let mut regs = BTreeMap::new();
+    let hubris = context.archive.as_ref().unwrap();
 
     if subargs.fp && !core.is_dump() {
         let mvfr = MVFR0::read(core)?;
@@ -368,7 +367,7 @@ pub fn init() -> (Command, ClapCommand<'static>) {
             archive: Archive::Optional,
             attach: Attach::Any,
             validate: Validate::None,
-            run: Run::Subargs(registers),
+            run: registers,
         },
         RegistersArgs::command(),
     )
