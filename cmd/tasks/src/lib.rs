@@ -206,7 +206,7 @@ fn tasks(context: &mut humility::ExecutionContext) -> Result<()> {
         core.halt()?;
 
         let cur =
-            core.read_word_32(hubris.lookup_symword("CURRENT_TASK_PTR")?)?;
+            hubris.arch.as_ref().unwrap().get_current_task_ptr(hubris, core)?;
 
         //
         // We read the entire task table at a go to get as consistent a
