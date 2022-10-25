@@ -68,6 +68,12 @@ pub trait Arch {
 
     fn get_generic_chip(&self) -> String;
 
+    fn get_current_task_ptr(
+        &self,
+        hubris: &HubrisArchive,
+        core: &mut dyn crate::core::Core,
+    ) -> Result<u32>;
+
     fn presyscall_pushes(
         &self,
         cs: &Capstone,
