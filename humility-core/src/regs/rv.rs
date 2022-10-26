@@ -252,13 +252,13 @@ impl RVRegister {
     /// The difference being that the CSR are offset by 65
     /// While the debug module itself expects https://raw.githubusercontent.com/riscv/riscv-debug-spec/master/riscv-debug-stable.pdf#table.3.3
     ///
-    pub fn to_gdb_id(&self) -> u16 {
+    pub fn to_gdb_id(&self) -> u32 {
         // pc is at a special index
         if self == &RVRegister::PC {
             return 32;
         }
 
-        let mut reg_id = RVRegister::to_u16(self).unwrap();
+        let mut reg_id = RVRegister::to_u32(self).unwrap();
         if !self.is_special() {
             reg_id -= 0x1000;
         } else {

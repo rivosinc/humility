@@ -56,6 +56,12 @@ impl Register {
             Register::RiscV(reg) => reg.fields(),
         }
     }
+    pub fn to_gdb_id(&self) -> u32 {
+        match self {
+            Register::Arm(reg) => reg.to_gdb_id(),
+            Register::RiscV(reg) => reg.to_gdb_id(),
+        }
+    }
 }
 
 impl ToPrimitive for Register {
