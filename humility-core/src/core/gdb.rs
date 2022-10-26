@@ -3,13 +3,15 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use anyhow::{anyhow, bail, ensure, Result};
-use num_traits::ToPrimitive;
+use roxmltree::Document;
+use std::collections::HashMap;
 use std::fmt;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::Path;
 use std::str;
 use std::time::Duration;
+use xmlparser::{Token, Tokenizer};
 
 use super::Core;
 use humility_arch_reg::Register;
@@ -40,6 +42,7 @@ pub struct GDBCore {
     server: GDBServer,
     halted: bool,
     was_halted: bool,
+    reg_table: HashMap<String, u32>,
 }
 
 const GDB_PACKET_START: char = '$';
@@ -104,8 +107,8 @@ impl GDBCore {
         let mut rbuf = vec![0; 1024];
         let mut result = String::new();
 
+        log::trace!("reading first chunk");
         loop {
-            log::trace!("reading first chunk");
             let rval = self.stream.read(&mut rbuf)?;
             log::trace!("received {} bytes", rval);
             result.push_str(str::from_utf8(&rbuf[0..rval])?);
@@ -207,7 +210,13 @@ impl GDBCore {
         // we're in -- but it's also not the state that we want to be
         // in.  We explicitly run the target before returning.
         //
-        let mut core = Self { stream, server, halted: true, was_halted: true };
+        let mut core = Self {
+            stream,
+            server,
+            halted: true,
+            was_halted: true,
+            reg_table: HashMap::new(),
+        };
 
         let data = core.recvdata();
         match data {
@@ -229,11 +238,103 @@ impl GDBCore {
             }
         };
 
-        //TODO may need to call qSupported to enable register reads, according to https://github.com/qemu/qemu/blob/master/gdbstub.c#L1722
-        //let supported = core.sendcmd("qSupported")?;
-        //log::trace!("{} supported string: {}", server, supported);
+        let supported = core.sendcmd("qSupported")?;
+        log::trace!("{} supported string: {}", server, supported);
+        // need to call to enable single register reads
+        // see: https://github.com/qemu/qemu/blob/e750a7ace492f0b450653d4ad368a77d6f660fb8/gdbstub/gdbstub.c#L1600
+        let feature_read =
+            core.sendcmd("qXfer:features:read:target.xml:0,ffb")?;
+        let feature_read = &mut feature_read.chars();
+        feature_read.next();
+        log::trace!("feature read string: {:?}", feature_read);
+        core.feature_xml_parser(feature_read.as_str());
+        log::trace!("reg table: {:?}", core.reg_table);
         core.run()?;
         Ok(core)
+    }
+
+    // TODO
+    // The parsing assumes an precise xml structure that might not be true if the gdbstub changes.
+    // It also only parses for the `regnum` attribute.
+    // We have to use the `xmlparser` crate here as `roxmltree` will attempt to parse the includes
+    // when we don't actually have them yet...
+    fn feature_xml_parser(&mut self, xml_string: &str) {
+        let tokens = Tokenizer::from(xml_string);
+
+        // Each include will be an attribute token
+        let includes = tokens.filter_map(|token| match token {
+            Ok(Token::Attribute { local, value, .. }) => {
+                //TODO we are assuming the only hrefs within the xml are for includes...
+                // `local` is the name of the attribute
+                if "href" == local.as_str() {
+                    Some(value.as_str())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        });
+
+        // Request and parse out the register numbers from each included file
+        for include in includes {
+            self.request_and_parse(include);
+        }
+    }
+
+    fn fetch_xml(&mut self, xml_file: &str) -> Result<String> {
+        // request the xml
+        // we unwrap since the server told us that the xml exist, so we should receive it,
+        // otherwise something is broken
+        //
+        let mut len_read = 0;
+        let mut features = "".to_owned();
+        loop {
+            let data = self.sendcmd(
+                format!("qXfer:features:read:{}:{:x},ffb", xml_file, len_read)
+                    .as_str(),
+            )?;
+            len_read += data.len() - 1;
+
+            let mut data = data.chars();
+            // the first char will be 'l' or 'm' to indicate if more xml data is avaliable
+            let first_char = data.next().unwrap();
+
+            features.push_str(data.as_str());
+            if first_char == 'l' {
+                break;
+            }
+        }
+
+        Ok(features)
+    }
+
+    // This function uses the higher level `roxmltree` crate as it is easier to use
+    fn request_and_parse(&mut self, xml_file: &str) {
+        log::trace!("parsing include: {}", xml_file);
+        // request the included xml
+        // we unwrap since the server told us that the xml exist, so we should receive it,
+        // otherwise something is broken
+        let features = self.fetch_xml(xml_file).unwrap();
+        log::trace!("whole xml: {}", features);
+        let doc = Document::parse(features.as_str()).unwrap();
+        for feature in doc.root_element().children() {
+            // only parse the reg tags for now
+            if feature.tag_name().name() == "reg" {
+                let attributes = feature.attributes();
+                if attributes.len() != 3 {
+                    continue;
+                }
+                // TODO
+                // the attribute locations are hardcoded for now, otherwise I would have to scan
+                // them all multiple times
+                let name = attributes[0].value();
+                if attributes[2].name() != "regnum" {
+                    continue;
+                }
+                let regnum: u32 = attributes[2].value().parse().unwrap();
+                self.reg_table.insert(name.to_owned(), regnum);
+            }
+        }
     }
 }
 
@@ -268,11 +369,36 @@ impl Core for GDBCore {
     }
 
     fn read_reg(&mut self, reg: Register) -> Result<u32> {
-        let cmd = &format!("p{:02X}", Register::to_u16(&reg).unwrap());
+        log::trace!("reading reg: {:?}", reg);
+        let reg_id = if self.reg_table.is_empty()
+            || reg.is_general_purpose()
+            || reg.is_pc()
+        {
+            reg.to_openocd_id().unwrap()
+        } else {
+            let reg_string = reg.to_string().to_lowercase();
+            log::trace!("checking for reg: {}", reg_string);
+            if let Some(id) = self.reg_table.get(&reg_string) {
+                *id
+            } else {
+                bail!(
+                    "register table provided, but does not contains: {}",
+                    reg_string
+                );
+            }
+        };
+
+        let cmd = &format!("p{:02X}", reg_id);
 
         let rstr = self.sendcmd(cmd)?;
+        let mut buf = vec![];
 
-        Ok(u32::from_str_radix(&rstr, 16)?)
+        // now we have to decode the register value
+        for i in (0..rstr.len()).step_by(2) {
+            buf.push(u8::from_str_radix(&rstr[i..=i + 1], 16)?);
+        }
+
+        Ok(u32::from_le_bytes(buf[..].try_into().unwrap()))
     }
 
     fn write_reg(&mut self, _reg: Register, _value: u32) -> Result<()> {

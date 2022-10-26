@@ -86,6 +86,10 @@ pub enum ARMRegister {
 }
 
 impl ARMRegister {
+    pub fn to_openocd_id(&self) -> Option<u32> {
+        ARMRegister::to_u32(self)
+    }
+
     pub fn is_general_purpose(&self) -> bool {
         matches!(
             self,

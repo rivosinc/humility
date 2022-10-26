@@ -32,6 +32,12 @@ pub enum Register {
 }
 
 impl Register {
+    pub fn is_pc(&self) -> bool {
+        match self {
+            Register::Arm(reg) => *reg == ARMRegister::PC,
+            Register::RiscV(reg) => *reg == RVRegister::PC,
+        }
+    }
     pub fn is_general_purpose(&self) -> bool {
         match self {
             Register::Arm(reg) => reg.is_general_purpose(),
@@ -56,9 +62,9 @@ impl Register {
             Register::RiscV(reg) => reg.fields(),
         }
     }
-    pub fn to_openocd_id(&self) -> Option<u16> {
+    pub fn to_openocd_id(&self) -> Option<u32> {
         match self {
-            Register::Arm(reg) => ARMRegister::to_u16(reg),
+            Register::Arm(reg) => reg.to_openocd_id(),
             Register::RiscV(reg) => reg.to_openocd_id(),
         }
     }
