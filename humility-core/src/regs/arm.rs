@@ -86,6 +86,10 @@ pub enum ARMRegister {
 }
 
 impl ARMRegister {
+    pub fn to_gdb_id(&self) -> u32 {
+        ARMRegister::to_u32(self).unwrap()
+    }
+
     pub fn is_general_purpose(&self) -> bool {
         matches!(
             self,

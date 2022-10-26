@@ -197,14 +197,9 @@ impl Core for OpenOCDCore {
     }
 
     fn read_reg(&mut self, reg: Register) -> Result<u32> {
-        let mut reg_id = Register::to_u16(&reg).unwrap();
-        if let Register::RiscV(rv_reg) = reg {
-            log::trace!("converting register id for openocd");
-            reg_id = rv_reg.to_gdb_id();
-        }
+        let reg_id = reg.to_gdb_id();
 
         self.op_start()?;
-        use num_traits::ToPrimitive;
 
         let cmd = format!("reg {}", reg_id);
         let rval = self.sendcmd(&cmd)?;
