@@ -287,28 +287,26 @@ impl GDBCore {
         // request the xml
         // we unwrap since the server told us that the xml exist, so we should receive it,
         // otherwise something is broken
-        let mut features = self.sendcmd(
-            format!("qXfer:features:read:{}:0,ffb", xml_file).as_str(),
-        )?;
-
-        // means there is more xml to come
-        // TODO currently assume we can read it all in 2 passes
-        if features.starts_with('m') {
-            let len = features.len();
-            let extra = self.sendcmd(
-                format!("qXfer:features:read:{}:{:x},ffb", xml_file, len)
+        //
+        let mut len_read = 0;
+        let mut features = "".to_owned();
+        loop {
+            let data = self.sendcmd(
+                format!("qXfer:features:read:{}:{:x},ffb", xml_file, len_read)
                     .as_str(),
             )?;
-            // need to skip first character
-            let mut extra = extra.chars();
-            extra.next();
-            // need to add extra space that gets dropped
-            features.push(' ');
-            features.push_str(extra.as_str());
+            len_read += data.len() - 1;
+
+            let mut data = data.chars();
+            // the first char will be 'l' or 'm' to indicate if more xml data is avaliable
+            let first_char = data.next().unwrap();
+
+            features.push_str(data.as_str());
+            if first_char == 'l' {
+                break;
+            }
         }
 
-        //remove leading m or l
-        features.remove(0);
         Ok(features)
     }
 
