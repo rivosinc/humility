@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 
 use crate::regs::Register;
 use std::fmt;
@@ -83,13 +83,14 @@ impl GDBCore {
     // GDB support is still WIP, so may need later
     #[allow(unused)]
     fn recvack(&mut self) -> Result<()> {
-        let mut rbuf = vec![0; 1024];
+        let mut rbuf = vec![0; 1];
 
         let rval = self.stream.read(&mut rbuf)?;
-        if rval != 1 {
-            //TODO sometimes get halt packet instead, probably need a way to properly handle
-            log::trace!("expected ack, but got: {:?}", rbuf);
-        }
+        // should get ACK, aka '+' or 0x2b
+        // ensure we got our 1 byte
+        ensure!(rval == 1);
+        // ensure that byte is the the ack
+        ensure!(rbuf[0] == GDB_PACKET_ACK as u8);
         log::trace!("received ack");
         Ok(())
     }
@@ -153,8 +154,7 @@ impl GDBCore {
     fn sendcmd(&mut self, cmd: &str) -> Result<String> {
         let mut just_halted = false;
         self.firecmd(cmd)?;
-        //TODO spec says you should send an ack, but only seems to cause problems
-        //self.recvack()?;
+        self.recvack()?;
 
         let mut data = self.recvdata()?;
         // if core halted
@@ -166,15 +166,17 @@ impl GDBCore {
             self.firecmd(cmd)?;
             data = self.recvdata()?;
         }
-        self.sendack()?;
         if just_halted {
             self.firecmd("c")?;
             self.halted = false;
         }
-        Ok(data)
+        if data.len() == 3 && data.chars().nth(0).unwrap() == 'E' {
+            bail!("received error code: {}", data)
+        } else {
+            Ok(data)
+        }
     }
 
-    //TODO Should keep track if the target was initially halted or not, and leave in that state
     pub fn new(server: GDBServer) -> Result<GDBCore> {
         let port = match server {
             GDBServer::OpenOCD => 3333,
