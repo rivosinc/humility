@@ -374,7 +374,10 @@ impl Core for GDBCore {
 
     fn read_reg(&mut self, reg: Register) -> Result<u32> {
         log::trace!("reading reg: {:?}", reg);
-        let reg_id = if self.reg_table.is_empty() {
+        let reg_id = if self.reg_table.is_empty()
+            || reg.is_general_purpose()
+            || reg.is_pc()
+        {
             reg.to_gdb_id()
         } else {
             let reg_string = reg.to_string().to_lowercase();
