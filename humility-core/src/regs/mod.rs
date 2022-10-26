@@ -32,6 +32,12 @@ pub enum Register {
 }
 
 impl Register {
+    pub fn is_pc(&self) -> bool {
+        match self {
+            Register::Arm(reg) => *reg == ARMRegister::PC,
+            Register::RiscV(reg) => *reg == RVRegister::PC,
+        }
+    }
     pub fn is_general_purpose(&self) -> bool {
         match self {
             Register::Arm(reg) => reg.is_general_purpose(),
