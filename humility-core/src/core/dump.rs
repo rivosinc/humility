@@ -133,15 +133,15 @@ impl Core for DumpCore {
         bail!("read of {} bytes from invalid address: 0x{:x}", rsize, addr);
     }
 
-    fn read_reg(&mut self, reg: Register) -> Result<u32> {
+    fn read_reg(&mut self, reg: Register) -> Result<u64> {
         if let Some(val) = self.registers.get(&reg) {
-            Ok(*val)
+            Ok(*val as u64)
         } else {
             bail!("register {} not found in dump", reg);
         }
     }
 
-    fn write_reg(&mut self, _reg: Register, _value: u32) -> Result<()> {
+    fn write_reg(&mut self, _reg: Register, _value: u64) -> Result<()> {
         bail!("cannot write register on a dump");
     }
 

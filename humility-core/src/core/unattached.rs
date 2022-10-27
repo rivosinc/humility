@@ -49,11 +49,11 @@ impl Core for UnattachedCore {
         bail!("Unimplemented when unattached!");
     }
 
-    fn read_reg(&mut self, _reg: Register) -> Result<u32> {
+    fn read_reg(&mut self, _reg: Register) -> Result<u64> {
         bail!("Unimplemented when unattached!");
     }
 
-    fn write_reg(&mut self, _reg: Register, _value: u32) -> Result<()> {
+    fn write_reg(&mut self, _reg: Register, _value: u64) -> Result<()> {
         bail!("Unimplemented when unattached!");
     }
 

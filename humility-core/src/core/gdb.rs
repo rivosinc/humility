@@ -370,7 +370,7 @@ impl Core for GDBCore {
         Ok(())
     }
 
-    fn read_reg(&mut self, reg: Register) -> Result<u32> {
+    fn read_reg(&mut self, reg: Register) -> Result<u64> {
         log::trace!("reading reg: {:?}", reg);
         let reg_id = if self.reg_table.is_empty()
             || reg.is_general_purpose()
@@ -399,11 +399,14 @@ impl Core for GDBCore {
         for i in (0..rstr.len()).step_by(2) {
             buf.push(u8::from_str_radix(&rstr[i..=i + 1], 16)?);
         }
-
-        Ok(u32::from_le_bytes(buf[..].try_into().unwrap()))
+        match rstr.len() {
+            8 => Ok(u32::from_le_bytes(buf[..].try_into().unwrap()) as u64),
+            16 => Ok(u64::from_le_bytes(buf[..].try_into().unwrap())),
+            _ => bail!("invalid register response"),
+        }
     }
 
-    fn write_reg(&mut self, _reg: Register, _value: u32) -> Result<()> {
+    fn write_reg(&mut self, _reg: Register, _value: u64) -> Result<()> {
         Err(anyhow!(
             "{} GDB target does not support modifying state", self.server
         ))

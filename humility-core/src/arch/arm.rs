@@ -216,8 +216,9 @@ impl Arch for ARMArch {
         &self,
         hubris: &HubrisArchive,
         core: &mut dyn crate::core::Core,
-    ) -> Result<u32> {
-        core.read_word_32(hubris.lookup_symword("CURRENT_TASK_PTR")?)
+    ) -> Result<u64> {
+        Ok(core.read_word_32(hubris.lookup_symword("CURRENT_TASK_PTR")?)?
+            as u64)
     }
     //
     // On ARM, our stub frames (that is, those frames that contain system call

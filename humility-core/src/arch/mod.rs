@@ -67,7 +67,7 @@ pub trait Arch {
         &self,
         hubris: &HubrisArchive,
         core: &mut dyn crate::core::Core,
-    ) -> Result<u32>;
+    ) -> Result<u64>;
 
     fn presyscall_pushes(
         &self,
