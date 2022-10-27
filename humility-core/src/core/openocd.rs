@@ -187,7 +187,7 @@ impl Core for OpenOCDCore {
         Ok(())
     }
 
-    fn write_reg(&mut self, _reg: Register, _val: u32) -> Result<()> {
+    fn write_reg(&mut self, _reg: Register, _val: u64) -> Result<()> {
         // This does not work right now, TODO?
         // openocd does support reading though
         //
@@ -196,7 +196,8 @@ impl Core for OpenOCDCore {
         ))
     }
 
-    fn read_reg(&mut self, reg: Register) -> Result<u32> {
+    // TODO always reads 32bit for now
+    fn read_reg(&mut self, reg: Register) -> Result<u64> {
         let reg_id = reg.to_gdb_id();
 
         self.op_start()?;
@@ -206,8 +207,9 @@ impl Core for OpenOCDCore {
 
         if let Some(line) = rval.lines().next() {
             if let Some(val) = line.split_whitespace().last() {
+                log::trace!("register received val: {}", val);
                 if let Ok(rval) = parse_int::parse::<u32>(val) {
-                    return Ok(rval);
+                    return Ok(rval as u64);
                 }
             }
         }

@@ -2964,7 +2964,11 @@ impl HubrisArchive {
         if let Some(sym) = self.esyms_byname.get("Reset") {
             if let Ok(pc) = core.read_reg(self.arch.as_ref().unwrap().get_pc())
             {
-                if pc >= sym.0 && pc < sym.0 + sym.1 {
+                // TODO: the PC range check can be removed once `sym` is full 64bit.
+                if (pc <= std::u32::MAX as u64)
+                    && (pc as u32) >= sym.0
+                    && (pc as u32) < sym.0 + sym.1
+                {
                     bail!("target is not yet booted (currently in Reset)");
                 }
             }
@@ -3332,7 +3336,8 @@ impl HubrisArchive {
         // If this is the current task, we want to pull the current PC.
         //
         if offset - save == cur {
-            let pc = core.read_reg(self.arch.as_ref().unwrap().get_pc())?;
+            let pc =
+                core.read_reg(self.arch.as_ref().unwrap().get_pc())? as u32;
 
             //
             // If the PC falls within the task, then we are at user-level,
@@ -3348,7 +3353,7 @@ impl HubrisArchive {
 
             if userland {
                 for reg in self.arch.as_ref().unwrap().get_all_gpr() {
-                    let val = core.read_reg(reg)?;
+                    let val = core.read_reg(reg)? as u32;
                     rval.insert(reg, val);
                 }
 
@@ -3722,7 +3727,7 @@ impl HubrisArchive {
             if let Err(_err) = val {
                 log::trace!("skipping register: {}", reg);
             } else {
-                regs.push((reg.to_u32().unwrap(), val.unwrap()));
+                regs.push((reg.to_u32().unwrap(), val.unwrap() as u32));
             }
         }
 
