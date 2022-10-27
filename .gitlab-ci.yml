@@ -1,0 +1,14 @@
+nix-cache:
+  stage: build
+  image: $RIVOS_NIX_IMG 
+  variables:
+    INSTALLABLES: '.#humility'
+    NIX_CONFIG: |
+      experimental-features = nix-command flakes
+      extra-substituters = $RIVOS_NIX_CACHE 
+      extra-trusted-public-keys = $RIVOS_NIX_CACHE_PUB_KEY 
+      max-jobs = auto 
+  script:
+    # no need to rerun the whole test suite, the github CI does that already, just need to build and cache it
+    - nix build --print-build-logs ${INSTALLABLES}
+    - push-rivos-cache ${INSTALLABLES}
