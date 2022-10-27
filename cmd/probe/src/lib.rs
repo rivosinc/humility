@@ -241,10 +241,12 @@ fn probecmd(context: &mut humility::ExecutionContext) -> Result<()> {
                 .and_then(|_| core.read_reg(Register::Arm(ARMRegister::PC)))
                 .and_then(|val| {
                     core.step()?;
-                    Ok(val)
+                    Ok(val as u32)
                 })
                 .and_then(|val| {
-                    if core.read_reg(Register::Arm(ARMRegister::PC))? == val {
+                    if core.read_reg(Register::Arm(ARMRegister::PC))? as u32
+                        == val
+                    {
                         Ok("not progressing")
                     } else {
                         Ok("progressing")
@@ -343,7 +345,7 @@ fn probecmd(context: &mut humility::ExecutionContext) -> Result<()> {
             }
         };
 
-        let val = core.read_reg(Register::Arm(reg))?;
+        let val = core.read_reg(Register::Arm(reg))? as u32;
 
         humility::msg!(
             "{:>12} => 0x{:8} {}",

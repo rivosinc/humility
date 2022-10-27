@@ -124,7 +124,9 @@ impl Core for ProbeCore {
         self.halt_and_read(|core| Ok(core.read_8(addr, data)?))
     }
 
-    fn read_reg(&mut self, reg: Register) -> Result<u32> {
+    // TODO need to bump probe-rs version to support 64bit values
+    // for now just upcast everything to match the interface
+    fn read_reg(&mut self, reg: Register) -> Result<u64> {
         let mut core = self.session.core(0)?;
         let reg_id = Register::to_u16(&reg).unwrap();
 
@@ -132,10 +134,12 @@ impl Core for ProbeCore {
 
         Ok(core.read_core_reg(Into::<probe_rs::CoreRegisterAddress>::into(
             reg_id,
-        ))?)
+        ))? as u64)
     }
 
-    fn write_reg(&mut self, reg: Register, value: u32) -> Result<()> {
+    // TODO need to bump probe-rs version to support 64bit values
+    // for now just upcast everything to match the interface
+    fn write_reg(&mut self, reg: Register, value: u64) -> Result<()> {
         let mut core = self.session.core(0)?;
         let reg_id = Register::to_u16(&reg).unwrap();
 
@@ -143,7 +147,7 @@ impl Core for ProbeCore {
 
         core.write_core_reg(
             Into::<probe_rs::CoreRegisterAddress>::into(reg_id),
-            value,
+            value as u32,
         )?;
 
         Ok(())

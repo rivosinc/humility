@@ -276,7 +276,7 @@ fn registers(context: &mut humility::ExecutionContext) -> Result<()> {
         }
 
         let val = match core.read_reg(reg) {
-            Ok(val) => val,
+            Ok(val) => val as u32,
             Err(_) => {
                 log::trace!("skipping register {}", reg);
                 continue;

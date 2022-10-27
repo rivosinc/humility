@@ -258,7 +258,7 @@ fn tasks(context: &mut humility::ExecutionContext) -> Result<()> {
         }
 
         if let Ok(pc) = core.read_reg(hubris.arch.as_ref().unwrap().get_pc()) {
-            if hubris.instr_mod(pc).is_none() {
+            if hubris.instr_mod(pc as u32).is_none() {
                 humility::warn!(
                     "PC 0x{:x} is unknown; \
                     system may be executing in ROM!",
