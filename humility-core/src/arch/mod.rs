@@ -26,6 +26,11 @@ pub trait Arch {
     fn get_ei_class(&self) -> u8;
 
     ///
+    /// Returns the register size in bits
+    ///
+    fn get_abi_size(&self) -> u8;
+
+    ///
     /// Returns the instruction used to trigger a syscall
     ///
     fn get_syscall_insn(&self) -> u32;

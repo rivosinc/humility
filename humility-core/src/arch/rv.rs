@@ -36,6 +36,15 @@ impl Arch for RVArch {
         self.ei_class
     }
 
+    fn get_abi_size(&self) -> u8 {
+        match self.ei_class {
+            goblin::elf::header::ELFCLASS32 => 32,
+            goblin::elf::header::ELFCLASS64 => 64,
+            // this wont ever actually match, so we will just return 0...
+            _ => 0,
+        }
+    }
+
     fn get_syscall_insn(&self) -> u32 {
         RiscVInsn::RISCV_INS_ECALL as u32
     }
