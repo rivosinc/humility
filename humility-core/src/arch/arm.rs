@@ -62,6 +62,10 @@ impl Arch for ARMArch {
         goblin::elf::header::ELFCLASS32
     }
 
+    fn get_abi_size(&self) -> u8 {
+        32
+    }
+
     fn get_syscall_insn(&self) -> u32 {
         ArmInsn::ARM_INS_SVC as u32
     }

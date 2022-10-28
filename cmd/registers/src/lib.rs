@@ -155,11 +155,27 @@ struct RegistersArgs {
     fp: bool,
 }
 
-fn print_reg(reg: Register, val: u32, fields: &[RegisterField]) {
-    print!("{:>5} = 0x{:08x} <- ", reg, val);
-    let indent = 5 + "= 0x00000000 <- ".len();
+fn reg_map_to_u32(regs: &BTreeMap<Register, u64>) -> BTreeMap<Register, u32> {
+    let mut new_map = BTreeMap::new();
+    for (key, value) in regs {
+        new_map.insert(*key, *value as u32);
+    }
+    new_map
+}
 
-    for i in (0..32).step_by(4).rev() {
+fn print_reg(reg: Register, val: u64, fields: &[RegisterField], reg_size: u16) {
+    print!(
+        "{:>9} = 0x{:0width$x} <- ",
+        reg,
+        val,
+        width = (reg_size as usize) / 4
+    );
+    // 9 spaces for the register name
+    // 4 for the "= 0x"
+    // 4 again for the " <- "
+    let indent = (9 + 4 + reg_size / 4 + 4) as usize;
+
+    for i in (0..reg_size).step_by(4).rev() {
         print!("{:04b}", (val >> i) & 0b1111);
 
         if i != 0 {
@@ -169,14 +185,14 @@ fn print_reg(reg: Register, val: u32, fields: &[RegisterField]) {
         }
     }
 
-    fn print_bars(f: &[RegisterField], elbow: bool) {
-        let mut pos = 32;
+    let print_bars = |f: &[RegisterField], elbow: bool| {
+        let mut pos = reg_size;
 
         for i in 0..f.len() {
             while pos > f[i].lowbit {
                 print!(" ");
 
-                if pos % 4 == 0 && pos != 32 {
+                if pos % 4 == 0 && pos != reg_size {
                     print!(" ");
                 }
 
@@ -188,7 +204,7 @@ fn print_reg(reg: Register, val: u32, fields: &[RegisterField]) {
 
                 while pos > 0 {
                     print!("-");
-                    if pos % 4 == 0 && pos != 32 {
+                    if pos % 4 == 0 && pos != reg_size {
                         print!("-");
                     }
 
@@ -205,12 +221,12 @@ fn print_reg(reg: Register, val: u32, fields: &[RegisterField]) {
                 break;
             }
 
-            if pos % 4 == 0 && pos != 32 {
+            if pos % 4 == 0 && pos != reg_size {
                 print!(" ");
             }
             pos -= 1;
         }
-    }
+    };
 
     print!("{:indent$}", "");
     print_bars(fields, false);
@@ -220,7 +236,7 @@ fn print_reg(reg: Register, val: u32, fields: &[RegisterField]) {
         print!("{:indent$}", "");
         print_bars(&fields[0..=ndx], true);
 
-        let mask = ((1u64 << (field.highbit - field.lowbit + 1)) - 1) as u32;
+        let mask = (1u64 << (field.highbit - field.lowbit + 1)) - 1;
 
         if mask == 1 {
             println!("{} = {}", field.name, (val >> field.lowbit) & mask);
@@ -238,6 +254,7 @@ fn registers(context: &mut humility::ExecutionContext) -> Result<()> {
     let subargs = RegistersArgs::try_parse_from(subargs)?;
     let mut regs = BTreeMap::new();
     let hubris = context.archive.as_ref().unwrap();
+    let reg_size = hubris.arch.as_ref().unwrap().get_abi_size() as usize;
 
     if subargs.fp && !core.is_dump() {
         let mvfr = MVFR0::read(core)?;
@@ -276,7 +293,7 @@ fn registers(context: &mut humility::ExecutionContext) -> Result<()> {
         }
 
         let val = match core.read_reg(reg) {
-            Ok(val) => val as u32,
+            Ok(val) => val,
             Err(_) => {
                 log::trace!("skipping register {}", reg);
                 continue;
@@ -287,7 +304,7 @@ fn registers(context: &mut humility::ExecutionContext) -> Result<()> {
     }
 
     let printer = humility_cmd::stack::StackPrinter {
-        indent: 8,
+        indent: 9,
         line: subargs.line,
         ..Default::default()
     };
@@ -296,26 +313,28 @@ fn registers(context: &mut humility::ExecutionContext) -> Result<()> {
         let val = *val;
 
         if let Some(fields) = reg.fields() {
-            print_reg(*reg, val, &fields);
+            print_reg(*reg, val, &fields, reg_size as u16);
             continue;
         }
 
         println!(
-            "{:>5} = 0x{:08x}{}",
+            "{:>9} = 0x{:0width$x}{}",
             reg,
             val,
             if !reg.is_floating_point() {
-                match hubris.explain(&regions, val) {
+                match hubris.explain(&regions, val as u32) {
                     Some(explain) => format!(" <- {}", explain),
                     None => "".to_string(),
                 }
             } else {
                 "".to_string()
-            }
+            },
+            width = reg_size / 4,
         );
 
         if subargs.stack && *reg == hubris.arch.as_ref().unwrap().get_sp() {
-            if let Some((_, region)) = regions.range(..=val).next_back() {
+            if let Some((_, region)) = regions.range(..=val as u32).next_back()
+            {
                 let task = if region.tasks.len() == 1 {
                     region.tasks[0]
                 } else {
@@ -327,8 +346,13 @@ fn registers(context: &mut humility::ExecutionContext) -> Result<()> {
                     continue;
                 };
 
-                match hubris.stack(core, task, region.base + region.size, &regs)
-                {
+                // TODO: once the hubris core has 64bit support, the map cast won't be required
+                match hubris.stack(
+                    core,
+                    task,
+                    region.base + region.size,
+                    &reg_map_to_u32(&regs),
+                ) {
                     Ok(stack) => printer.print(hubris, &stack),
                     Err(e) => {
                         //
@@ -350,7 +374,7 @@ fn registers(context: &mut humility::ExecutionContext) -> Result<()> {
                     }
                 }
             } else {
-                humility::msg!("unknown region for SP 0x{:08x}", val);
+                humility::msg!("unknown region for SP 0x{:016x}", val);
             }
         }
     }
