@@ -82,18 +82,15 @@ impl Arch for RVArch {
         &self,
         hubris: &HubrisArchive,
         core: &mut dyn crate::core::Core,
-    ) -> Result<u32> {
-        core.read_word_32(hubris.lookup_symword("CURRENT_TASK_PTR")?)
-
-        //TODO
-        //match hubris.lookup_symword("CURRENT_TASK_PTR") {
-        //Ok(ptr) => core.read_word_32(ptr),
-        // Means current task is in mscratch or sscratch, but only if on riscv
-        //Err(_) => {
-        // TODO right now blindly check mscratch, but should check that it is valid
-        //core.read_reg(Register::RiscV(RVRegister::MSCRATCH))
-        //}
-        //}
+    ) -> Result<u64> {
+        match hubris.lookup_symword("CURRENT_TASK_PTR") {
+            Ok(ptr) => Ok(core.read_word_32(ptr)? as u64),
+            // Means current task is in mscratch or sscratch, but only if on riscv
+            Err(_) => {
+                // TODO right now blindly check mscratch, but should check that it is valid
+                core.read_reg(Register::RiscV(RVRegister::MSCRATCH))
+            }
+        }
     }
 
     ///

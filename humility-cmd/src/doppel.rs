@@ -38,10 +38,42 @@ use humility::reflect::{Load, Ptr, Value};
 use std::convert::TryInto;
 use zerocopy::{AsBytes, LittleEndian, U16, U64};
 
+// this struct exist to just help load the 32 bit task desc
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Load)]
-pub struct TaskDesc {
+pub struct TaskDesc32 {
     pub entry_point: u32,
     pub initial_stack: u32,
+}
+
+// this struct exist to just help load the 64 bit task desc
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Load)]
+pub struct TaskDesc64 {
+    pub entry_point: u64,
+    pub initial_stack: u64,
+}
+// This struct will be used by the rest of humility to represent a task desc
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct TaskDesc {
+    pub entry_point: u64,
+    pub initial_stack: u64,
+}
+
+impl humility::reflect::Load for TaskDesc {
+    fn from_value(v: &Value) -> Result<Self> {
+        if let Ok(td) = TaskDesc32::from_value(v) {
+            Ok(Self {
+                entry_point: td.entry_point as u64,
+                initial_stack: td.initial_stack as u64,
+            })
+        } else if let Ok(td) = TaskDesc64::from_value(v) {
+            Ok(Self {
+                entry_point: td.entry_point,
+                initial_stack: td.initial_stack,
+            })
+        } else {
+            bail!("unexpected task description: {:?}", v)
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Load)]
