@@ -25,6 +25,8 @@ use crate::{msg, warn};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use fallible_iterator::FallibleIterator;
 use gimli::UnwindSection;
+use goblin::elf::note::Nhdr32;
+use goblin::elf::program_header::program_header32;
 use goblin::elf::Elf;
 use idol::syntax::Interface;
 use multimap::MultiMap;
@@ -288,6 +290,252 @@ pub enum HubrisArchiveDoneness {
     Cook,
     /// Load archive into memory, but do not otherwise process
     Raw,
+}
+
+macro_rules! dump {
+    ($func_name:ident, $program_hdr:ident, $note_hdr:ident) => {
+        fn $func_name(
+            &self,
+            core: &mut dyn crate::core::Core,
+            dumpfile: Option<&str>,
+        ) -> Result<()> {
+            use indicatif::{HumanBytes, HumanDuration};
+            use indicatif::{ProgressBar, ProgressStyle};
+            use std::io::Write;
+
+            let regions = self.regions(core)?;
+            let nsegs = regions
+                .values()
+                .fold(0, |ttl, r| ttl + if !r.attr.device { 1 } else { 0 });
+
+            macro_rules! pad {
+                ($size:expr) => {
+                    ((4 - ($size & 0b11)) & 0b11) as u32
+                };
+            }
+
+            // even a Nhdr64 only aligns to 4bytes
+            let pad = [0u8; 4];
+
+            let ctx = goblin::container::Ctx::new(
+                goblin::container::Container::Little,
+                goblin::container::Endian::Little,
+            );
+
+            let oxide = String::from(OXIDE_NT_NAME);
+
+            let notesz = |note: &$note_hdr| {
+                size_of::<$note_hdr>() as u32
+                    + note.n_namesz
+                    + pad!(note.n_namesz)
+                    + note.n_descsz
+                    + pad!(note.n_descsz)
+            };
+
+            let mut notes = vec![];
+            let mut regs = vec![];
+
+            for reg in self.arch.as_ref().unwrap().get_all_registers() {
+                let val = core.read_reg(reg);
+                if let Err(_err) = val {
+                    log::trace!("skipping register: {}", reg);
+                } else {
+                    regs.push((reg.to_u32().unwrap(), val.unwrap() as u32));
+                }
+            }
+
+            notes.push(
+                ($note_hdr {
+                    n_namesz: (oxide.len() + 1) as u32,
+                    n_descsz: regs.len() as u32 * 8,
+                    n_type: OXIDE_NT_HUBRIS_REGISTERS,
+                }),
+            );
+
+            notes.push($note_hdr {
+                n_namesz: (oxide.len() + 1) as u32,
+                n_descsz: self.archive.len() as u32,
+                n_type: OXIDE_NT_HUBRIS_ARCHIVE,
+            });
+
+            let mut header = goblin::elf::header::Header::new(ctx);
+            header.e_machine = self.arch.as_ref().unwrap().get_e_machine();
+            header.e_ident[goblin::elf::header::EI_CLASS] =
+                self.arch.as_ref().unwrap().get_ei_class();
+            header.e_type = goblin::elf::header::ET_CORE;
+            header.e_phoff = header.e_ehsize as u64;
+            header.e_phnum = (notes.len() + nsegs) as u16;
+
+            let mut offset = header.e_phoff as u32
+                + (header.e_phentsize * header.e_phnum) as u32;
+
+            let filename = match dumpfile {
+                Some(filename) => filename.to_owned(),
+                None => {
+                    let mut filename;
+                    let mut i = 0;
+
+                    loop {
+                        filename = format!("hubris.core.{}", i);
+
+                        if let Ok(_f) = fs::File::open(&filename) {
+                            i += 1;
+                            continue;
+                        }
+
+                        break;
+                    }
+
+                    filename
+                }
+            };
+
+            //
+            // Write our ELF header
+            //
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&filename)?;
+
+            msg!("dumping to {}", filename);
+
+            file.iowrite_with(header, ctx)?;
+
+            let mut bytes = [0x0u8; $program_hdr::SIZEOF_PHDR];
+
+            //
+            // Write our program headers, starting with our note headers.
+            //
+            for note in &notes {
+                let size = notesz(note);
+
+                let phdr = $program_hdr::ProgramHeader {
+                    p_type: $program_hdr::PT_NOTE,
+                    p_flags: $program_hdr::PF_R,
+                    p_offset: offset,
+                    p_filesz: size,
+                    ..Default::default()
+                };
+
+                bytes.pwrite_with(phdr, 0, ctx.le)?;
+                file.write_all(&bytes)?;
+
+                offset += size;
+            }
+
+            let mut total = 0;
+
+            for (_, region) in regions.iter() {
+                if region.attr.device {
+                    continue;
+                }
+
+                let seg_phdr = $program_hdr::ProgramHeader {
+                    p_type: $program_hdr::PT_LOAD,
+                    p_flags: $program_hdr::PF_R,
+                    p_offset: offset,
+                    p_vaddr: region.base,
+                    p_filesz: region.size,
+                    p_memsz: region.size,
+                    ..Default::default()
+                };
+
+                bytes.pwrite_with(seg_phdr, 0, ctx.le)?;
+                file.write_all(&bytes)?;
+
+                offset += region.size + pad!(region.size);
+                total += region.size;
+            }
+            for note in &notes {
+                //
+                // Now write our note section, starting with our note header...
+                //
+                let mut bytes = [0x0u8; size_of::<$note_hdr>()];
+                bytes.pwrite_with(note, 0, ctx.le)?;
+                file.write_all(&bytes)?;
+
+                //
+                // ...and our note name
+                //
+                let bytes = oxide.as_bytes();
+                file.write_all(bytes)?;
+                let npad = 1 + pad!(note.n_namesz) as usize;
+                file.write_all(&pad[0..npad])?;
+
+                //
+                // ...and finally, the note itself.
+                //
+                match note.n_type {
+                    OXIDE_NT_HUBRIS_REGISTERS => {
+                        let mut bytes = [0x0u8; 8];
+
+                        for (reg, val) in regs.iter() {
+                            bytes.pwrite_with(reg, 0, ctx.le)?;
+                            bytes.pwrite_with(val, 4, ctx.le)?;
+                            file.write_all(&bytes)?;
+                        }
+                    }
+                    OXIDE_NT_HUBRIS_ARCHIVE => {
+                        file.write_all(&self.archive)?;
+                    }
+                    _ => {
+                        panic!("unimplemented note");
+                    }
+                }
+
+                let npad = pad!(note.n_descsz) as usize;
+                file.write_all(&pad[0..npad])?;
+            }
+
+            //
+            // And now we write our segments.  This takes a little while, so
+            // we're going to indicate our progress as we go.
+            //
+            let mut written = 0;
+
+            let started = Instant::now();
+            let bar = ProgressBar::new(total as u64);
+            bar.set_style(ProgressStyle::default_bar().template(
+                "humility: dumping [{bar:30}] {bytes}/{total_bytes}",
+            ));
+
+            for (_, region) in regions.iter() {
+                if region.attr.device {
+                    continue;
+                }
+
+                let mut remain = region.size as usize;
+                let mut bytes = vec![0; 1024];
+                let mut addr = region.base;
+
+                while remain > 0 {
+                    let nbytes =
+                        if remain > bytes.len() { bytes.len() } else { remain };
+
+                    core.read_8(addr, &mut bytes[0..nbytes])?;
+                    file.write_all(&bytes[0..nbytes])?;
+                    remain -= nbytes;
+                    written += nbytes;
+                    addr += nbytes as u32;
+                    bar.set_position(written as u64);
+                }
+
+                let npad = pad!(region.size) as usize;
+                file.write_all(&pad[0..npad])?;
+            }
+
+            bar.finish_and_clear();
+
+            msg!(
+                "dumped {} in {}",
+                HumanBytes(written as u64),
+                HumanDuration(started.elapsed())
+            );
+
+            Ok(())
+        }
+    };
 }
 
 #[derive(Debug)]
@@ -3066,11 +3314,14 @@ impl HubrisArchive {
                 // ptrtype.
                 //
                 if let Some(v) = self.basetypes.get(&m.goff) {
-                    if v.size != 4 {
+                    let ptr_size = (self.arch.as_ref().unwrap().get_abi_size()
+                        / 8) as usize;
+
+                    if v.size != ptr_size {
                         return Err(anyhow!(
                             "expected {} in struct {} ({}) to \
-                            be 4 bytes, found to be {} bytes",
-                            member, structure.name, structure.goff, v.size
+                            be {} bytes, found to be {} bytes",
+                            member, structure.name, structure.goff, ptr_size, v.size
                         ));
                     }
                 } else if self.ptrtypes.contains_key(&m.goff) {
@@ -3749,242 +4000,16 @@ impl HubrisArchive {
         })
     }
 
+    dump!(dump32, program_header32, Nhdr32);
     pub fn dump(
         &self,
         core: &mut dyn crate::core::Core,
         dumpfile: Option<&str>,
     ) -> Result<()> {
-        use indicatif::{HumanBytes, HumanDuration};
-        use indicatif::{ProgressBar, ProgressStyle};
-        use std::io::Write;
-
-        let regions = self.regions(core)?;
-        let nsegs = regions
-            .values()
-            .fold(0, |ttl, r| ttl + usize::from(!r.attr.device));
-
-        macro_rules! pad {
-            ($size:expr) => {
-                ((4 - ($size & 0b11)) & 0b11) as u32
-            };
+        match self.arch.as_ref().unwrap().get_abi_size() {
+            32 => self.dump32(core, dumpfile),
+            _ => bail!("dumping is not supported for your architecture."),
         }
-
-        let pad = [0u8; 4];
-
-        let ctx = goblin::container::Ctx::new(
-            goblin::container::Container::Little,
-            goblin::container::Endian::Little,
-        );
-
-        let oxide = String::from(OXIDE_NT_NAME);
-
-        let notesz = |note: &goblin::elf::note::Nhdr32| {
-            size_of::<goblin::elf::note::Nhdr32>() as u32
-                + note.n_namesz
-                + pad!(note.n_namesz)
-                + note.n_descsz
-                + pad!(note.n_descsz)
-        };
-
-        let mut notes = vec![];
-        let mut regs = vec![];
-
-        for reg in self.arch.as_ref().unwrap().get_all_registers() {
-            let val = core.read_reg(reg);
-            if let Err(_err) = val {
-                log::trace!("skipping register: {}", reg);
-            } else {
-                regs.push((reg.to_u32().unwrap(), val.unwrap() as u32));
-            }
-        }
-
-        notes.push(goblin::elf::note::Nhdr32 {
-            n_namesz: (oxide.len() + 1) as u32,
-            n_descsz: regs.len() as u32 * 8,
-            n_type: OXIDE_NT_HUBRIS_REGISTERS,
-        });
-
-        notes.push(goblin::elf::note::Nhdr32 {
-            n_namesz: (oxide.len() + 1) as u32,
-            n_descsz: self.archive.len() as u32,
-            n_type: OXIDE_NT_HUBRIS_ARCHIVE,
-        });
-
-        let mut header = goblin::elf::header::Header::new(ctx);
-        header.e_machine = self.arch.as_ref().unwrap().get_e_machine();
-        header.e_ident[goblin::elf::header::EI_CLASS] =
-            self.arch.as_ref().unwrap().get_ei_class();
-        header.e_type = goblin::elf::header::ET_CORE;
-        header.e_phoff = header.e_ehsize as u64;
-        header.e_phnum = (notes.len() + nsegs) as u16;
-
-        let mut offset = header.e_phoff as u32
-            + (header.e_phentsize * header.e_phnum) as u32;
-
-        let filename = match dumpfile {
-            Some(filename) => filename.to_owned(),
-            None => {
-                let mut filename;
-                let mut i = 0;
-
-                loop {
-                    filename = format!("hubris.core.{}", i);
-
-                    if let Ok(_f) = fs::File::open(&filename) {
-                        i += 1;
-                        continue;
-                    }
-
-                    break;
-                }
-
-                filename
-            }
-        };
-
-        //
-        // Write our ELF header
-        //
-        let mut file =
-            OpenOptions::new().write(true).create_new(true).open(&filename)?;
-
-        msg!("dumping to {}", filename);
-
-        file.iowrite_with(header, ctx)?;
-
-        let mut bytes = [0x0u8; goblin::elf32::program_header::SIZEOF_PHDR];
-
-        //
-        // Write our program headers, starting with our note headers.
-        //
-        for note in &notes {
-            let size = notesz(note);
-
-            let phdr = goblin::elf32::program_header::ProgramHeader {
-                p_type: goblin::elf::program_header::PT_NOTE,
-                p_flags: goblin::elf::program_header::PF_R,
-                p_offset: offset,
-                p_filesz: size,
-                ..Default::default()
-            };
-
-            bytes.pwrite_with(phdr, 0, ctx.le)?;
-            file.write_all(&bytes)?;
-
-            offset += size;
-        }
-
-        let mut total = 0;
-
-        for (_, region) in regions.iter() {
-            if region.attr.device {
-                continue;
-            }
-
-            let seg_phdr = goblin::elf32::program_header::ProgramHeader {
-                p_type: goblin::elf::program_header::PT_LOAD,
-                p_flags: goblin::elf::program_header::PF_R,
-                p_offset: offset,
-                p_vaddr: region.base,
-                p_filesz: region.size,
-                p_memsz: region.size,
-                ..Default::default()
-            };
-
-            bytes.pwrite_with(seg_phdr, 0, ctx.le)?;
-            file.write_all(&bytes)?;
-
-            offset += region.size + pad!(region.size);
-            total += region.size;
-        }
-        for note in &notes {
-            //
-            // Now write our note section, starting with our note header...
-            //
-            let mut bytes = [0x0u8; size_of::<goblin::elf::note::Nhdr32>()];
-            bytes.pwrite_with(note, 0, ctx.le)?;
-            file.write_all(&bytes)?;
-
-            //
-            // ...and our note name
-            //
-            let bytes = oxide.as_bytes();
-            file.write_all(bytes)?;
-            let npad = 1 + pad!(note.n_namesz) as usize;
-            file.write_all(&pad[0..npad])?;
-
-            //
-            // ...and finally, the note itself.
-            //
-            match note.n_type {
-                OXIDE_NT_HUBRIS_REGISTERS => {
-                    let mut bytes = [0x0u8; 8];
-
-                    for (reg, val) in regs.iter() {
-                        bytes.pwrite_with(reg, 0, ctx.le)?;
-                        bytes.pwrite_with(val, 4, ctx.le)?;
-                        file.write_all(&bytes)?;
-                    }
-                }
-                OXIDE_NT_HUBRIS_ARCHIVE => {
-                    file.write_all(&self.archive)?;
-                }
-                _ => {
-                    panic!("unimplemented note");
-                }
-            }
-
-            let npad = pad!(note.n_descsz) as usize;
-            file.write_all(&pad[0..npad])?;
-        }
-
-        //
-        // And now we write our segments.  This takes a little while, so
-        // we're going to indicate our progress as we go.
-        //
-        let mut written = 0;
-
-        let started = Instant::now();
-        let bar = ProgressBar::new(total as u64);
-        bar.set_style(
-            ProgressStyle::default_bar()
-                .template("humility: dumping [{bar:30}] {bytes}/{total_bytes}"),
-        );
-
-        for (_, region) in regions.iter() {
-            if region.attr.device {
-                continue;
-            }
-
-            let mut remain = region.size as usize;
-            let mut bytes = vec![0; 1024];
-            let mut addr = region.base;
-
-            while remain > 0 {
-                let nbytes =
-                    if remain > bytes.len() { bytes.len() } else { remain };
-
-                core.read_8(addr, &mut bytes[0..nbytes])?;
-                file.write_all(&bytes[0..nbytes])?;
-                remain -= nbytes;
-                written += nbytes;
-                addr += nbytes as u32;
-                bar.set_position(written as u64);
-            }
-
-            let npad = pad!(region.size) as usize;
-            file.write_all(&pad[0..npad])?;
-        }
-
-        bar.finish_and_clear();
-
-        msg!(
-            "dumped {} in {}",
-            HumanBytes(written as u64),
-            HumanDuration(started.elapsed())
-        );
-
-        Ok(())
     }
 
     #[allow(clippy::print_literal)]
