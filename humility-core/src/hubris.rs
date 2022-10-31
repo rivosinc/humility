@@ -25,8 +25,9 @@ use crate::{msg, warn};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use fallible_iterator::FallibleIterator;
 use gimli::UnwindSection;
+use goblin::container::Container;
 use goblin::elf::note::Nhdr32;
-use goblin::elf::program_header::program_header32;
+use goblin::elf::program_header::{program_header32, program_header64};
 use goblin::elf::Elf;
 use idol::syntax::Interface;
 use multimap::MultiMap;
@@ -293,7 +294,7 @@ pub enum HubrisArchiveDoneness {
 }
 
 macro_rules! dump {
-    ($func_name:ident, $program_hdr:ident, $note_hdr:ident) => {
+    ($func_name:ident, $program_hdr:ident, $note_hdr:ident, $note_hdr_field_size:ty, $abi_size:ty) => {
         fn $func_name(
             &self,
             core: &mut dyn crate::core::Core,
@@ -310,25 +311,33 @@ macro_rules! dump {
 
             macro_rules! pad {
                 ($size:expr) => {
-                    ((4 - ($size & 0b11)) & 0b11) as u32
+                    ((4 - ($size & 0b11)) & 0b11) as $abi_size
                 };
             }
 
             // even a Nhdr64 only aligns to 4bytes
             let pad = [0u8; 4];
 
+            // this should get optimized away since everything is a constant...
+            let container_size: Container = match size_of::<$abi_size>() {
+                    4 => Container::Little,
+                    8 => Container::Big,
+                    _ => bail!("unsupported abi size: {}", size_of::<$abi_size>()),
+                };
             let ctx = goblin::container::Ctx::new(
-                goblin::container::Container::Little,
+                container_size,
                 goblin::container::Endian::Little,
             );
 
             let oxide = String::from(OXIDE_NT_NAME);
 
             let notesz = |note: &$note_hdr| {
-                size_of::<$note_hdr>() as u32
-                    + note.n_namesz
+                size_of::<$note_hdr>() as $abi_size
+                    // these field could be 32 or 64 bit depending on Nhdr, but we always want the
+                    // offsets to be $abi_size.  This mantains support for the full address range
+                    + note.n_namesz as $abi_size
                     + pad!(note.n_namesz)
-                    + note.n_descsz
+                    + note.n_descsz as $abi_size
                     + pad!(note.n_descsz)
             };
 
@@ -346,28 +355,38 @@ macro_rules! dump {
 
             notes.push(
                 ($note_hdr {
-                    n_namesz: (oxide.len() + 1) as u32,
-                    n_descsz: regs.len() as u32 * 8,
-                    n_type: OXIDE_NT_HUBRIS_REGISTERS,
+                    n_namesz: (oxide.len() + 1) as $note_hdr_field_size,
+                    // TODO macro this
+                    // 8 = 4 bytes for register id + 4bytes for register value
+                    n_descsz: regs.len() as $note_hdr_field_size * 8,
+                    n_type: OXIDE_NT_HUBRIS_REGISTERS.into(),
                 }),
             );
 
             notes.push($note_hdr {
-                n_namesz: (oxide.len() + 1) as u32,
-                n_descsz: self.archive.len() as u32,
-                n_type: OXIDE_NT_HUBRIS_ARCHIVE,
+                n_namesz: (oxide.len() + 1) as $note_hdr_field_size,
+                n_descsz: self.archive.len() as $note_hdr_field_size,
+                n_type: OXIDE_NT_HUBRIS_ARCHIVE.into(),
             });
 
             let mut header = goblin::elf::header::Header::new(ctx);
+
             header.e_machine = self.arch.as_ref().unwrap().get_e_machine();
             header.e_ident[goblin::elf::header::EI_CLASS] =
                 self.arch.as_ref().unwrap().get_ei_class();
+
             header.e_type = goblin::elf::header::ET_CORE;
+
             header.e_phoff = header.e_ehsize as u64;
             header.e_phnum = (notes.len() + nsegs) as u16;
 
-            let mut offset = header.e_phoff as u32
-                + (header.e_phentsize * header.e_phnum) as u32;
+            // we are not storing any section headers
+            header.e_shnum = 0;
+            // according to `man elf`, set to zero when no section headers
+            header.e_shoff = 0;
+
+            let mut offset = header.e_phoff as $abi_size
+                + (header.e_phentsize * header.e_phnum) as $abi_size;
 
             let filename = match dumpfile {
                 Some(filename) => filename.to_owned(),
@@ -409,7 +428,6 @@ macro_rules! dump {
             //
             for note in &notes {
                 let size = notesz(note);
-
                 let phdr = $program_hdr::ProgramHeader {
                     p_type: $program_hdr::PT_NOTE,
                     p_flags: $program_hdr::PF_R,
@@ -435,16 +453,17 @@ macro_rules! dump {
                     p_type: $program_hdr::PT_LOAD,
                     p_flags: $program_hdr::PF_R,
                     p_offset: offset,
-                    p_vaddr: region.base,
-                    p_filesz: region.size,
-                    p_memsz: region.size,
+                    // TODO these cast are only needed until hubris::regions has 64bit support
+                    p_vaddr: region.base as $abi_size,
+                    p_filesz: region.size as $abi_size,
+                    p_memsz: region.size as $abi_size,
                     ..Default::default()
                 };
 
                 bytes.pwrite_with(seg_phdr, 0, ctx.le)?;
                 file.write_all(&bytes)?;
 
-                offset += region.size + pad!(region.size);
+                offset += region.size as $abi_size + pad!(region.size);
                 total += region.size;
             }
             for note in &notes {
@@ -452,6 +471,7 @@ macro_rules! dump {
                 // Now write our note section, starting with our note header...
                 //
                 let mut bytes = [0x0u8; size_of::<$note_hdr>()];
+
                 bytes.pwrite_with(note, 0, ctx.le)?;
                 file.write_all(&bytes)?;
 
@@ -466,12 +486,16 @@ macro_rules! dump {
                 //
                 // ...and finally, the note itself.
                 //
-                match note.n_type {
+                // cast note type down to u32 since we know the OXIDE_NTs are u32 constants
+                match (note.n_type as u32) {
                     OXIDE_NT_HUBRIS_REGISTERS => {
                         let mut bytes = [0x0u8; 8];
 
                         for (reg, val) in regs.iter() {
+                            // TODO macro based on abi_size
+                            // write register id to offset 0
                             bytes.pwrite_with(reg, 0, ctx.le)?;
+                            // write register value to offset 4
                             bytes.pwrite_with(val, 4, ctx.le)?;
                             file.write_all(&bytes)?;
                         }
@@ -2921,7 +2945,8 @@ impl HubrisArchive {
             elf.header.e_ident[goblin::elf::header::EI_CLASS],
         ));
 
-        if let Some(notes) = elf.iter_note_headers(&contents) {
+        let note_iters = elf.iter_note_headers(&contents);
+        if let Some(notes) = note_iters {
             for note in notes {
                 match note {
                     Ok(note) => {
@@ -3310,31 +3335,20 @@ impl HubrisArchive {
 
             if i == fields.len() - 1 {
                 //
-                // We want to make sure that this is a 32-bit basetype or a
+                // We want to make sure that this is a basetype or a
                 // ptrtype.
                 //
-                if let Some(v) = self.basetypes.get(&m.goff) {
-                    let ptr_size = (self.arch.as_ref().unwrap().get_abi_size()
-                        / 8) as usize;
-
-                    if v.size != ptr_size {
-                        return Err(anyhow!(
-                            "expected {} in struct {} ({}) to \
-                            be {} bytes, found to be {} bytes",
-                            member, structure.name, structure.goff, ptr_size, v.size
-                        ));
-                    }
-                } else if self.ptrtypes.contains_key(&m.goff) {
+                if self.basetypes.get(&m.goff).is_some()
+                    || self.ptrtypes.contains_key(&m.goff)
+                {
                     break;
                 } else {
                     return Err(anyhow!(
                         "expected {} in struct {} ({}) to \
-                        be 4 byte type, found to be {}",
+                        be base type or ptr type type, found to be {}",
                         member, structure.name, structure.goff, m.goff
                     ));
                 }
-
-                break;
             }
 
             //
@@ -4000,7 +4014,13 @@ impl HubrisArchive {
         })
     }
 
-    dump!(dump32, program_header32, Nhdr32);
+    dump!(dump32, program_header32, Nhdr32, u32, u32);
+    // 64 bit still uses the 32bit header as most tools (readelf, goblin, etc) don't actually parse the Nhdr64 struct, they just assume Nhdr32...
+    // See [goblin
+    // source](https://github.com/m4b/goblin/blob/c81ebdbe5686427090726a5156bd128549ac7499/src/elf/note.rs#L208)
+    // and corresponding commit, 467d7d70a10fe908030e9d18f69241d8f11a5bec.  The comments in the
+    // source say that they have never seen a 64bit note header...
+    dump!(dump64, program_header64, Nhdr32, u32, u64);
     pub fn dump(
         &self,
         core: &mut dyn crate::core::Core,
@@ -4008,6 +4028,7 @@ impl HubrisArchive {
     ) -> Result<()> {
         match self.arch.as_ref().unwrap().get_abi_size() {
             32 => self.dump32(core, dumpfile),
+            64 => self.dump64(core, dumpfile),
             _ => bail!("dumping is not supported for your architecture."),
         }
     }
