@@ -85,10 +85,21 @@ impl Arch for RVArch {
     ) -> Result<u64> {
         match hubris.lookup_symword("CURRENT_TASK_PTR") {
             Ok(ptr) => Ok(core.read_word_32(ptr)? as u64),
-            // Means current task is in mscratch or sscratch, but only if on riscv
+            // Means current task is in mscratch or sscratch
             Err(_) => {
-                // TODO right now blindly check mscratch, but should check that it is valid
-                core.read_reg(Register::RiscV(RVRegister::MSCRATCH))
+                let task_register = if hubris
+                    .manifest
+                    .features
+                    .contains(&"s-mode".to_owned())
+                {
+                    log::trace!("using sscratch");
+                    RVRegister::SSCRATCH
+                } else {
+                    log::trace!("using mscratch");
+                    RVRegister::MSCRATCH
+                };
+                // TODO right now blindly check scratch, but should check that it is valid
+                core.read_reg(Register::RiscV(task_register))
             }
         }
     }

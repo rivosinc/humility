@@ -42,7 +42,7 @@ const MAX_HUBRIS_VERSION: u32 = 3;
 pub struct HubrisManifest {
     version: Option<String>,
     gitrev: Option<String>,
-    features: Vec<String>,
+    pub features: Vec<String>,
     board: Option<String>,
     pub name: Option<String>,
     pub target: Option<String>,
