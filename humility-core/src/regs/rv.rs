@@ -31,6 +31,11 @@ use strum_macros::EnumIter;
 ///
 pub enum RVRegister {
     CSR_START = 0x0,
+    SSCRATCH = 0x140,
+    SEPC,
+    SCAUSE,
+    STVAL,
+    SIP,
     MSTATUS = 0x300,
     MISA,
     MEDELEG,
