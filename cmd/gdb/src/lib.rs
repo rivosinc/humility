@@ -90,6 +90,7 @@ pub fn gdb(context: &mut humility::ExecutionContext) -> Result<()> {
         "riscv32-none-elf-gdb",
         "riscv32-unknown-elf-gdb",
         "gdb-multiarch",
+        "gdb",
     ];
     for candidate in &GDB_NAMES {
         if Command::new(candidate)
