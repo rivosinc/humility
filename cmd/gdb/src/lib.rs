@@ -122,11 +122,12 @@ pub fn gdb(context: &mut ExecutionContext) -> Result<()> {
 
     let mut gdb_cmd = None;
 
-    const GDB_NAMES: [&str; 4] = [
+    const GDB_NAMES: [&str; 5] = [
         "arm-none-eabi-gdb",
         "riscv32-none-elf-gdb",
         "riscv32-unknown-elf-gdb",
         "gdb-multiarch",
+        "gdb",
     ];
     for candidate in &GDB_NAMES {
         if Command::new(candidate)
