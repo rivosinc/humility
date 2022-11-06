@@ -1271,6 +1271,7 @@ dependencies = [
  "humility-cmd",
  "humility-cmd-openocd",
  "humility-core",
+ "regex",
  "tempfile",
 ]
 
