@@ -19,12 +19,16 @@
 
 use std::process::{Command, Stdio};
 
+use std::fs;
+use tempfile::TempDir;
+
 use humility::cli::Subcommand;
 use humility_cmd::{Archive, Command as HumilityCmd};
 use humility_cmd_openocd::get_probe_serial;
 
 use anyhow::{bail, Context, Result};
 use clap::{Command as ClapCommand, CommandFactory, Parser};
+use regex::Regex;
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -48,6 +52,32 @@ struct GdbArgs {
     serial: Option<String>,
 }
 
+fn extract_elf_dir(work_dir: &TempDir) -> Result<String> {
+    // load script.gdb into string
+    let script = fs::read_to_string(&work_dir.path().join("script.gdb"))?;
+
+    // regex to extract the path where the elf files are,
+    // "script.gdb" should contain something like:
+    // `add-symbol-file target/my_app/dist/default/kernel`
+    // or
+    // `add-symbol-file target/my_app/dist/kernel`
+    // this extracts the path between the app name and kernel into a capture group. ex: "dist/default" or "dist/"
+    //
+    let re = Regex::new(r"(?:add-symbol-file) (?:(.*)?(?:kernel))")?;
+
+    // match all regex
+    // Should only be one match since we explicitly match kernel
+    let mut cap = re.captures_iter(&script);
+    // only use first capture group
+    let cap = cap.next().context("invalid `script.gdb`")?;
+
+    // within the capture group, the 0th element is the entire match, so our captured path is at
+    // index 1
+    let path = cap.get(1).context("invalid 'script.gdb'")?.as_str();
+
+    Ok(path.to_owned())
+}
+
 pub fn gdb(context: &mut humility::ExecutionContext) -> Result<()> {
     let Subcommand::Other(subargs) = context.cli.cmd.as_ref().unwrap();
     let hubris = context.archive.as_ref().unwrap();
@@ -60,13 +90,6 @@ pub fn gdb(context: &mut humility::ExecutionContext) -> Result<()> {
     let serial = get_probe_serial(&context.cli, subargs.serial.clone())?;
 
     let work_dir = tempfile::tempdir()?;
-    let name = match &hubris.manifest.name {
-        Some(name) => name,
-        None => bail!("Could not get app name from manifest"),
-    };
-    let elf_dir = work_dir.path().join("target").join(name).join("dist");
-    std::fs::create_dir_all(&elf_dir)?;
-    hubris.extract_elfs_to(&elf_dir)?;
 
     hubris
         .extract_file_to(
@@ -80,6 +103,20 @@ pub fn gdb(context: &mut humility::ExecutionContext) -> Result<()> {
             &work_dir.path().join("script.gdb"),
         )
         .context("GDB script missing. Is your Hubris build too old?")?;
+
+    // use the script.gdb to extract the proper elf path
+    let elf_dir = match extract_elf_dir(&work_dir) {
+        Ok(dir) => dir,
+        // fallback to "dist/default" if script.gdb is invalid
+        // realistly these means source level debugging won't work, but might
+        // as well try...
+        Err(_) => "dist/default".to_owned(),
+    };
+    let elf_dir = &work_dir.path().join(elf_dir);
+
+    std::fs::create_dir_all(elf_dir)?;
+    hubris.extract_elfs_to(elf_dir)?;
+
     hubris
         .extract_file_to("img/final.elf", &work_dir.path().join("final.elf"))?;
 
