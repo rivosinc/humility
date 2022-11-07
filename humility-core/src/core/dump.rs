@@ -21,7 +21,7 @@ use crate::core::Core;
 pub struct DumpCore {
     contents: Vec<u8>,
     regions: BTreeMap<u32, (u32, usize)>,
-    registers: HashMap<Register, u32>,
+    registers: HashMap<Register, u64>,
 }
 
 impl DumpCore {
@@ -135,7 +135,7 @@ impl Core for DumpCore {
 
     fn read_reg(&mut self, reg: Register) -> Result<u64> {
         if let Some(val) = self.registers.get(&reg) {
-            Ok(*val as u64)
+            Ok(*val)
         } else {
             bail!("register {} not found in dump", reg);
         }
