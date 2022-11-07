@@ -237,7 +237,6 @@ impl GDBCore {
                 }
                 log::trace!("connected to running core");
                 core.was_halted = false;
-                core.run()?;
             }
         };
 
@@ -252,6 +251,7 @@ impl GDBCore {
         log::trace!("feature read string: {:?}", feature_read);
         core.feature_xml_parser(feature_read.as_str());
         log::trace!("reg table: {:?}", core.reg_table);
+        core.run()?;
         Ok(core)
     }
 
