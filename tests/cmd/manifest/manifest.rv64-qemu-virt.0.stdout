@@ -1,0 +1,14 @@
+     version => hubris build archive v3
+     git rev => 8ac8ab97d3bee2bd03df15e355557aef299761bc
+    image id => [63, fd, 4e, 43, b0, 2a, 4a, 33]
+       board => rv64-qemu-virt
+      target => riscv64imac-unknown-none-elf
+    features => 
+  total size => 36K
+ kernel size => 20K
+       tasks => 4
+                ID TASK                SIZE FEATURES
+                 0 jefe               10.5K semihosting-riscv
+                 1 ping                5.2K 
+                 2 pong                0.4K 
+                 3 idle                0.1K 
