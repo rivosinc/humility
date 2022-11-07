@@ -1,0 +1,2 @@
+DESC      LOW          HIGH          SIZE ATTR  MODE 
+pmpaddr01 0x9000e000 - 0x9000efff     fff rwx-  TOR
