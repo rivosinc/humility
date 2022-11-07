@@ -330,9 +330,8 @@ macro_rules! load_registers {
                     }
                 };
 
-                // TODO: once the rest of hubris core supports 64bit regs, this cast can be
-                // removed. For now register reading form dumps will be broken...
-                if self.registers.insert(reg, val as u32).is_some() {
+                // all registers are just stored in a 64bit value
+                if self.registers.insert(reg, val as u64).is_some() {
                     bail!(
                         "duplicate register {} ({}) at offset {}",
                         reg,
@@ -654,7 +653,7 @@ pub struct HubrisArchive {
     syscall_pushes: HashMap<u32, Option<Vec<Register>>>,
 
     // Current registers (if a dump)
-    registers: HashMap<Register, u32>,
+    registers: HashMap<Register, u64>,
 
     // Modules: text address to module
     modules: BTreeMap<u32, HubrisModule>,
@@ -3667,7 +3666,7 @@ impl HubrisArchive {
         Ok(regions)
     }
 
-    pub fn dump_registers(&self) -> HashMap<Register, u32> {
+    pub fn dump_registers(&self) -> HashMap<Register, u64> {
         self.registers.clone()
     }
 
