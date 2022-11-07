@@ -293,6 +293,60 @@ pub enum HubrisArchiveDoneness {
     Raw,
 }
 
+const REG_ID_BYTES: usize = 4;
+/// Returns the number of bytes required to represent a register entry in a dump, a (reg_id,
+/// reg_value) pair.
+macro_rules! register_entry_size {
+    ($abi_size:ty) => {
+        // size of register (abi_size) in bytes plus the size of the register id (always u32)
+        size_of::<$abi_size>() + REG_ID_BYTES
+    }
+}
+
+macro_rules! load_registers {
+    ($func_name:ident, $abi_size:ty) => {
+        fn $func_name(&mut self, r: &[u8]) -> Result<()> {
+            const TOTAL_ENTRY_SIZE: usize = register_entry_size!($abi_size);
+            if r.len() % TOTAL_ENTRY_SIZE != 0 {
+                bail!("bad length {} in registers note", r.len());
+            }
+
+            for (i, chunk) in r.chunks_exact(TOTAL_ENTRY_SIZE).enumerate() {
+                let (id, val) = chunk.split_at(REG_ID_BYTES);
+                // We unwrap here because it can only fail if the length is wrong,
+                // but we already explicitly calculated the correct length
+                let id = u32::from_le_bytes(id.try_into().unwrap());
+                let val = <$abi_size>::from_le_bytes(val.try_into().unwrap());
+
+                let reg = match self.arch.as_ref().unwrap().register_from_id(id)
+                {
+                    Ok(r) => r,
+                    Err(_err) => {
+                        // This can totally happen if we encounter a future coredump
+                        // where we decided to store, say, additional MSRs or a
+                        // floating point register. Since this version of Humility
+                        // doesn't understand them, we'll just skip it.
+                        continue;
+                    }
+                };
+
+                // TODO: once the rest of hubris core supports 64bit regs, this cast can be
+                // removed. For now register reading form dumps will be broken...
+                if self.registers.insert(reg, val as u32).is_some() {
+                    bail!(
+                        "duplicate register {} ({}) at offset {}",
+                        reg,
+                        id,
+                        i * 8
+                    );
+                }
+            }
+
+            Ok(())
+        }
+    };
+}
+
 macro_rules! dump {
     ($func_name:ident, $program_hdr:ident, $note_hdr:ident, $note_hdr_field_size:ty, $abi_size:ty) => {
         fn $func_name(
@@ -344,21 +398,25 @@ macro_rules! dump {
             let mut notes = vec![];
             let mut regs = vec![];
 
+            // we will dump registers according to $abi_size, when the registers are loaded in they
+            // will be parsed according to $abi_size, the actual size of the registers wil NOT be
+            // stored in the dump.  The dump _should_ contain the archive which contains the
+            // correct $abi_size...
             for reg in self.arch.as_ref().unwrap().get_all_registers() {
                 let val = core.read_reg(reg);
                 if let Err(_err) = val {
                     log::trace!("skipping register: {}", reg);
                 } else {
-                    regs.push((reg.to_u32().unwrap(), val.unwrap() as u32));
+                    //  store tuple of: (register id, register value)
+                    regs.push((reg.to_u32().unwrap(), val.unwrap() as $abi_size));
                 }
             }
 
             notes.push(
                 ($note_hdr {
                     n_namesz: (oxide.len() + 1) as $note_hdr_field_size,
-                    // TODO macro this
-                    // 8 = 4 bytes for register id + 4bytes for register value
-                    n_descsz: regs.len() as $note_hdr_field_size * 8,
+                    // 4 bytes for register id + size of register value
+                    n_descsz: regs.len() as $note_hdr_field_size * (4 + size_of::<$abi_size>() as $note_hdr_field_size),
                     n_type: OXIDE_NT_HUBRIS_REGISTERS.into(),
                 }),
             );
@@ -489,13 +547,14 @@ macro_rules! dump {
                 // cast note type down to u32 since we know the OXIDE_NTs are u32 constants
                 match (note.n_type as u32) {
                     OXIDE_NT_HUBRIS_REGISTERS => {
-                        let mut bytes = [0x0u8; 8];
+                        // 4 bytes are used for register id, the rest are for the register value
+                        let mut bytes = [0x0u8; register_entry_size!($abi_size) as usize];
 
                         for (reg, val) in regs.iter() {
-                            // TODO macro based on abi_size
                             // write register id to offset 0
                             bytes.pwrite_with(reg, 0, ctx.le)?;
-                            // write register value to offset 4
+                            // write register value to offset 4, this does not depend on register
+                            // size since it comes second
                             bytes.pwrite_with(val, 4, ctx.le)?;
                             file.write_all(&bytes)?;
                         }
@@ -2895,36 +2954,14 @@ impl HubrisArchive {
         Ok(HubrisFlashConfig { metadata: flash, elf: slurp!("img/final.elf") })
     }
 
+    load_registers!(load_registers32, u32);
+    load_registers!(load_registers64, u64);
     fn load_registers(&mut self, r: &[u8]) -> Result<()> {
-        if r.len() % 8 != 0 {
-            bail!("bad length {} in registers note", r.len());
+        match self.arch.as_ref().unwrap().get_abi_size() {
+            32 => self.load_registers32(r),
+            64 => self.load_registers64(r),
+            _ => bail!("loading registers is not supported for you current architecture."),
         }
-
-        for (i, chunk) in r.chunks_exact(8).enumerate() {
-            let (id, val) = chunk.split_at(4);
-            // We unwrap here because it can only fail if the length is wrong,
-            // but we've explicitly broken a chunk of 8 into two chunks of 4,
-            // so a failure here would mean this code has been changed.
-            let id = u32::from_le_bytes(id.try_into().unwrap());
-            let val = u32::from_le_bytes(val.try_into().unwrap());
-
-            let reg = match self.arch.as_ref().unwrap().register_from_id(id) {
-                Ok(r) => r,
-                Err(_err) => {
-                    // This can totally happen if we encounter a future coredump
-                    // where we decided to store, say, additional MSRs or a
-                    // floating point register. Since this version of Humility
-                    // doesn't understand them, we'll just skip it.
-                    continue;
-                }
-            };
-
-            if self.registers.insert(reg, val).is_some() {
-                bail!("duplicate register {} ({}) at offset {}", reg, id, i * 8);
-            }
-        }
-
-        Ok(())
     }
 
     pub fn load_dump(
@@ -3332,7 +3369,6 @@ impl HubrisArchive {
             };
 
             offset += m.offset;
-
             if i == fields.len() - 1 {
                 //
                 // We want to make sure that this is a basetype or a
