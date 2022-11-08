@@ -3,4 +3,5 @@ result
 .cargo/.package-cache
 .cargo/git/
 .cargo/registry/
+.pre-commit-config.yaml
 
