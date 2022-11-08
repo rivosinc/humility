@@ -7,10 +7,15 @@
   inputs.rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
   inputs.rust-overlay.inputs.flake-utils.follows = "flake-utils";
 
+  inputs.pre-commit-hooks.url = "github:cachix/pre-commit-hooks.nix";
+  inputs.pre-commit-hooks.inputs.flake-utils.follows = "flake-utils";
+  inputs.pre-commit-hooks.inputs.nixpkgs.follows = "nixpkgs";
+
   outputs = {
     self,
     nixpkgs,
     rust-overlay,
+    pre-commit-hooks,
     flake-utils,
   }: (flake-utils.lib.eachDefaultSystem (system: let
     overlays = [(import rust-overlay)];
@@ -37,6 +42,19 @@
       inherit system;
       overlays = humility-overlays;
     };
+    pre-commit-checks = pre-commit-hooks.lib.${system}.run {
+      src = pkgs.lib.cleanSource ./.;
+      hooks = {
+        cargofmt = {
+          enable = true;
+          name = "cargo fmt";
+          entry = "${rust}/bin/cargo fmt --check --all";
+          files = "\\.rs$";
+          pass_filenames = false;
+        };
+        alejandra.enable = true;
+      };
+    };
   in {
     packages = flake-utils.lib.flattenTree {
       humility = humility-pkgs.humility;
@@ -47,6 +65,7 @@
       shellHook = ''
         export CARGO_HOME=$(pwd)/.cargo
         export PATH="$(pwd)/.cargo/bin:$PATH"
+        ${pre-commit-checks.shellHook}
       '';
 
       nativeBuildInputs = with pkgs;
