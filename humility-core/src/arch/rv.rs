@@ -72,6 +72,38 @@ impl Arch for RVArch {
         RVRegister::iter().map(Register::RiscV).collect()
     }
 
+    //
+    // TODO: will first check for `CURRENT_TASK_PTR` then check mscratch/sscratch,
+    // When using xscratch, there is a small time when the current task ptr is
+    // actually in a0 when handling a trap, we can detect this and read the
+    // correct register.
+    //
+    fn get_current_task_ptr(
+        &self,
+        hubris: &HubrisArchive,
+        core: &mut dyn crate::core::Core,
+    ) -> Result<u64> {
+        match hubris.lookup_symword("CURRENT_TASK_PTR") {
+            Ok(ptr) => Ok(core.read_word_32(ptr)? as u64),
+            // Means current task is in mscratch or sscratch
+            Err(_) => {
+                let task_register = if hubris
+                    .manifest
+                    .features
+                    .contains(&"s-mode".to_owned())
+                {
+                    log::trace!("using sscratch");
+                    RVRegister::SSCRATCH
+                } else {
+                    log::trace!("using mscratch");
+                    RVRegister::MSCRATCH
+                };
+                // TODO right now blindly check scratch, but should check that it is valid
+                core.read_reg(Register::RiscV(task_register))
+            }
+        }
+    }
+
     ///
     /// on RISCV platforms the dwarf id does not match the register id on the bus.
     /// see: https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-dwarf.adoc

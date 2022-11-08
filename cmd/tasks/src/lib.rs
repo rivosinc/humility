@@ -206,7 +206,8 @@ fn tasks(context: &mut humility::ExecutionContext) -> Result<()> {
         core.halt()?;
 
         let cur =
-            core.read_word_32(hubris.lookup_symword("CURRENT_TASK_PTR")?)?;
+            hubris.arch.as_ref().unwrap().get_current_task_ptr(hubris, core)?
+                as u32;
 
         //
         // We read the entire task table at a go to get as consistent a
@@ -335,7 +336,13 @@ fn tasks(context: &mut humility::ExecutionContext) -> Result<()> {
                 let regs = hubris.registers(core, t)?;
 
                 if subargs.stack {
-                    match hubris.stack(core, t, desc.initial_stack, &regs) {
+                    // TODO: the u32 cast wont be required once hubris core has 64bit support
+                    match hubris.stack(
+                        core,
+                        t,
+                        desc.initial_stack as u32,
+                        &regs,
+                    ) {
                         Ok(stack) => printer.print(hubris, &stack),
                         Err(e) => {
                             println!("   stack unwind failed: {:?} ", e);

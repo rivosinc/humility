@@ -42,7 +42,7 @@ const MAX_HUBRIS_VERSION: u32 = 3;
 pub struct HubrisManifest {
     version: Option<String>,
     gitrev: Option<String>,
-    features: Vec<String>,
+    pub features: Vec<String>,
     board: Option<String>,
     pub name: Option<String>,
     pub target: Option<String>,
@@ -3310,7 +3310,7 @@ impl HubrisArchive {
     ) -> Result<BTreeMap<Register, u32>> {
         let (base, _) = self.task_table(core)?;
         let cur =
-            core.read_word_32(self.lookup_symword("CURRENT_TASK_PTR")?)?;
+            self.arch.as_ref().unwrap().get_current_task_ptr(self, core)?;
 
         let module = self.lookup_module(t)?;
         let mut rval = BTreeMap::new();
@@ -3335,7 +3335,7 @@ impl HubrisArchive {
         //
         // If this is the current task, we want to pull the current PC.
         //
-        if offset - save == cur {
+        if offset - save == cur as u32 {
             let pc =
                 core.read_reg(self.arch.as_ref().unwrap().get_pc())? as u32;
 

@@ -417,7 +417,8 @@ fn find_task_names<'a>(
         .into_iter()
         .map(|desc| {
             hubris
-                .instr_mod(desc.entry_point)
+                // TODO the u32 cast will be removed once there is full 64bit support
+                .instr_mod(desc.entry_point as u32)
                 .unwrap_or("<unknown>")
                 .to_string()
         })

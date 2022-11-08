@@ -216,6 +216,14 @@ impl Arch for ARMArch {
         None
     }
 
+    fn get_current_task_ptr(
+        &self,
+        hubris: &HubrisArchive,
+        core: &mut dyn crate::core::Core,
+    ) -> Result<u64> {
+        Ok(core.read_word_32(hubris.lookup_symword("CURRENT_TASK_PTR")?)?
+            as u64)
+    }
     //
     // On ARM, our stub frames (that is, those frames that contain system call
     // instructions) have no DWARF information that describes how to unwind
