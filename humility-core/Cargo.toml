@@ -35,6 +35,7 @@ strum_macros = "0.24.1"
 clap = "3.0.12"
 roxmltree = "0.15"
 xmlparser = "0.13"
+hex = "0.4.3"
 
 #
 # We depend on the oxide-stable branch of Oxide's fork of probe-rs to assure
