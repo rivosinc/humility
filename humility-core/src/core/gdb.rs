@@ -5,6 +5,7 @@
 use anyhow::{anyhow, bail, ensure, Result};
 
 use crate::regs::Register;
+use hex::ToHex;
 use roxmltree::Document;
 use std::collections::HashMap;
 use std::fmt;
@@ -412,16 +413,24 @@ impl Core for GDBCore {
         ))
     }
 
-    fn write_word_32(&mut self, _addr: u32, _data: u32) -> Result<()> {
-        Err(anyhow!(
-            "{} GDB target does not support modifying state", self.server
-        ))
+    fn write_word_32(&mut self, addr: u32, data: u32) -> Result<()> {
+        let bytes: [u8; 4] = data.to_le_bytes();
+        self.write_8(addr, &bytes)
     }
 
-    fn write_8(&mut self, _addr: u32, _data: &[u8]) -> Result<()> {
-        Err(anyhow!(
-            "{} GDB target does not support modifying state", self.server
-        ))
+    fn write_8(&mut self, addr: u32, data: &[u8]) -> Result<()> {
+        let cmd = format!(
+            "M{:x},{:x}:{}",
+            addr,
+            data.len(),
+            data.encode_hex::<String>()
+        );
+
+        let rstr = self.sendcmd(&cmd)?;
+        match rstr.as_str() {
+            "OK" => Ok(()),
+            _ => bail!("invalid write response"),
+        }
     }
 
     fn halt(&mut self) -> Result<()> {
