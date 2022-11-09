@@ -11,6 +11,7 @@ clap.workspace = true
 fallible-iterator.workspace = true
 gimli.workspace = true
 goblin.workspace = true
+hex.workspace = true
 hubpack.workspace = true
 humility_load_derive.workspace = true
 humility-arch.workspace = true
