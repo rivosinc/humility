@@ -27,7 +27,7 @@
       humility = final.callPackage ./humility.nix {
         cargo = rust;
         src = self;
-        version = "0.9.2";
+        version = "0.9.5";
         inherit (prev.darwin.apple_sdk.frameworks) AppKit;
       };
     };
