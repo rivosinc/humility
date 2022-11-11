@@ -272,6 +272,7 @@ a specified target.  (In the above example, one could execute `humility
 - [humility stmsecure](#humility-stmsecure): change secure region settings on the stm32h7
 - [humility tasks](#humility-tasks): list Hubris tasks
 - [humility test](#humility-test): run Hubristest suite and parse results
+- [humility tofino-eeprom](#humility-tofino-eeprom): read and write to the Tofino SPI EEPROM
 - [humility trace](#humility-trace): trace Hubris operations
 - [humility validate](#humility-validate): validate presence and operation of devices
 - [humility vpd](#humility-vpd): read or write vital product data (VPD)
@@ -1256,11 +1257,10 @@ will both run OpenOCD and run a foreground GDB that is connected to it.
 
 No documentation yet for `humility pmbus`; pull requests welcome!
 
-<<<<<<< HEAD
 ### `humility pmp`
 
 On riscv platforms the pmp is used to prevent umode access to certain memory regions.
-This tool will decode the pmp csrs and output the memory regions and permisisons.
+This tool will decode the pmp csrs and output the memory regions and permissons.
 Often paired with `humility map`.
 
 To better understand the memory that a task is allowed to access, one can
@@ -1281,11 +1281,14 @@ pmpaddr06        0x0 -       0x1f      20 ----  NAPOT
 pmpaddr07        0x0 -       0x1f      20 ----  NAPOT
 ```
 
+
+
 ### `humility power`
 
 `humility power` displays the values associated with devices that
 can measure voltage, displaying voltage, current (if measured) and
 temperature (if measured).
+
 
 ### `humility probe`
 
@@ -1382,8 +1385,10 @@ The `--wait` option instructs qemu to wait for a gdb client to connect
 
 The `--gdb` option can be used to launch qemu and then open a gdb console connected to it
 
+The '--semihosting` option enables semihosting on qemu, not all qemu version will support this
+
 This works by parsing the qemu.sh file within the chip folder
-(`<hubris>/chips/<chipname>/qemu.sh`), then adding additional args to configure gdb
+(`<hubris>/chips/<chipname>/qemu.sh`), then adding additional args to configure qemu
 
 
 
@@ -1815,7 +1820,7 @@ over and over again.
 `humility repl` takes the same top level arguments as any other subcommand, and will remember them
 inside of the prompt. For example:
 
-```rust
+```console
 $ humility -a ../path/to/hubris/archive.zip repl
 humility: attached via ST-Link V2-1
 Welcome to the humility REPL! Try out some subcommands, or 'quit' to quit!
@@ -2335,6 +2340,11 @@ Error: test failed
 All received packet data will be dumped to the resulting output file,
 allowing these transient failures to be differentiated from deeper issues.
 
+
+
+### `humility tofino-eeprom`
+
+Tools to interact with the Tofino EEPROM
 
 
 ### `humility trace`

@@ -12,8 +12,10 @@
 //!
 //! The `--gdb` option can be used to launch qemu and then open a gdb console connected to it
 //!
+//! The '--semihosting` option enables semihosting on qemu, not all qemu version will support this
+//!
 //! This works by parsing the qemu.sh file within the chip folder
-//! (`<hubris>/chips/<chipname>/qemu.sh`), then adding additional args to configure gdb
+//! (`<hubris>/chips/<chipname>/qemu.sh`), then adding additional args to configure qemu
 //!
 
 use std::fs;
@@ -42,6 +44,10 @@ struct QemuArgs {
     /// immediatly start a connected gdb shell
     #[clap(long, short)]
     gdb: bool,
+
+    /// enable semihosting with qemu
+    #[clap(long, short)]
+    semihosting: bool,
 }
 
 fn qemu(context: &mut humility::ExecutionContext) -> Result<()> {
@@ -104,6 +110,12 @@ fn qemu(context: &mut humility::ExecutionContext) -> Result<()> {
 
     if subargs.wait || subargs.gdb {
         cmd.arg("-S");
+    }
+
+    if subargs.semihosting {
+        cmd.arg("-semihosting")
+            .arg("-semihosting-config")
+            .arg("enable=on,userspace=on");
     }
 
     humility::msg!("full cmd: {:?}", cmd);
