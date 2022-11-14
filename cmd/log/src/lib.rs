@@ -89,44 +89,34 @@ fn stringbuf_read(
     core: &mut dyn Core,
     definition: &HubrisStruct,
     ringbuf_var: &HubrisVariable,
-    prev_last_idx: u64,
-) -> Result<(String, u64)> {
+    prev_last_idx: usize,
+) -> Result<(String, usize)> {
     let mut log_msg: String = "".to_owned();
 
     // load the stringbuf from hubris into a corresponding local struct
-    let stringbuf: Stringbuf =
+    let mut stringbuf: Stringbuf =
         load_stringbuf(hubris, core, definition, ringbuf_var);
 
     // extract the log itself as a [u8]
-    let buffer = stringbuf.buffer.as_slice();
+    let buffer = stringbuf.buffer.as_mut_slice();
     // the last written element in the log
-    let last: u64 = stringbuf.last.unwrap() as u64;
+    let last = stringbuf.last.unwrap() as usize;
 
-    // read everything between current last, and last last by
-    // generating index range which connects these two in a circular manner, only including the
-    // new characters, and in the order they should be printed
-    // prev_last_idx has been printed already, last has not
-    let new_idxs: Vec<u64> = if last > prev_last_idx {
-        (prev_last_idx + 1..last).collect()
-    } else {
-        // This logic also works for last == prev_last_idx since we just need to print the entire range
+    let start_read_idx = (prev_last_idx + 1) % buffer.len();
+    // now circular rotate our buffer so it starts with the new characters
+    buffer.rotate_left(start_read_idx as usize);
 
-        // if prev_last_idx was not the last element of the buffer, then we include everything at
-        // the end of the ring buffer
-        if prev_last_idx as usize != buffer.len() - 1 {
-            // should not overflow the length of buffer as we just checked
-            let mut range = ((prev_last_idx + 1) as u64..buffer.len() as u64)
-                .collect::<Vec<u64>>();
-            range.append(&mut (0..=last).collect::<Vec<u64>>());
-            range
-        } else {
-            // prev_last_idx was the last element so we only need the beginning of the buffer
-            (0..=last).collect()
-        }
-    };
+    //
+    // rotate the last index to match the buffer
+    //
+    // we add buffer.len to prevent overflow, it will be "removed" when
+    // we take remainder later
+    let rot_last = (last + buffer.len()) - start_read_idx;
+    // take the modulus, ("%" is remainder in rust, but since we already offset by `buffer.len()`
+    // it is guaranteed to be > 0 still.
+    let rot_last = rot_last % buffer.len();
 
-    // at this point we have entirely new entries stored in `new_idxs`, so we can print them out
-    for i in new_idxs {
+    for i in 0..rot_last {
         match buffer[i as usize] as char {
             // don't print the carriage return or null character
             '\0' | '\r' => continue,
@@ -150,7 +140,7 @@ fn stringbuf_monitor(
     // see jira https://rivosinc.atlassian.net/browse/SW-440
     //
     // represents the last seen values from the string buffer
-    let mut prev_last_idx: u64 = 0;
+    let mut prev_last_idx = 0;
     let mut last_log: String = "".to_owned();
     loop {
         let (log, last) = stringbuf_read(
@@ -263,7 +253,7 @@ fn stringbuf(context: &mut humility::ExecutionContext) -> Result<()> {
                 let last = load_stringbuf(hubris, core, def, v.1).last.unwrap();
                 // now reuse that last to ensure we read the whole buffer in the correct order
                 let (log, _last) =
-                    stringbuf_read(hubris, core, def, v.1, last)?;
+                    stringbuf_read(hubris, core, def, v.1, last as usize)?;
                 print!("{}", log);
             }
         } else {
