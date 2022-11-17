@@ -52,7 +52,6 @@
           files = "\\.rs$";
           pass_filenames = false;
         };
-        alejandra.enable = true;
       };
     };
   in {
