@@ -3,21 +3,31 @@ on:
   pull_request:
   push:
 jobs:
-  linux-checks:
+  skip_duplicate_jobs:
     runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
-    - uses: actions/checkout@v2.4.0
-    - uses: cachix/install-nix-action@v15
-      with:
-        extra_nix_config: |
-          access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-    - run: nix flake check
-  darwin-checks:
-    runs-on: macOS-latest 
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@master
+        with:
+          concurrent_skipping: 'same_content'
+          skip_after_successful_duplicate: 'true'
+          do_not_skip: '["pull_request", "workflow_dispatch", "schedule"]'
+  flake-checks:
+    needs: skip_duplicate_jobs
+    if: ${{ needs.skip_duplicate_jobs.outputs.should_skip != 'true' }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest macOS-latest ]
+    runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v2.4.0
-    - uses: cachix/install-nix-action@v15
+    - uses: actions/checkout@v3
+    - uses: cachix/install-nix-action@v17
       with:
-        extra_nix_config: |
-          access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-    - run: nix flake check
+        nix_path: nixpkgs=channel:nixos-unstable
+    - uses: cachix/cachix-action@v11
+      with:
+        name: hubris-humility
+        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+    - run: nix flake check --print-build-logs
