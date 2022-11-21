@@ -74,21 +74,15 @@ pub trait Core {
 
 fn parse_probe(probe: &str) -> (&str, Option<usize>) {
     if probe.contains('-') {
-        let str = probe.to_owned();
-        let pieces: Vec<&str> = str.split('-').collect();
+        let pieces: Vec<&str> = probe.split('-').collect();
 
-        if pieces[0] == "usb" && pieces.len() == 2 {
+        if pieces.len() == 2 {
             if let Ok(val) = pieces[1].parse::<usize>() {
-                ("usb", Some(val))
-            } else {
-                (probe, None)
+                return (pieces[0], Some(val));
             }
-        } else {
-            (probe, None)
         }
-    } else {
-        (probe, None)
     }
+    (probe, None)
 }
 
 fn get_usb_probe(index: Option<usize>) -> Result<probe_rs::DebugProbeInfo> {
@@ -177,11 +171,11 @@ pub fn attach_to_chip(
     hubris: &HubrisArchive,
     chip: Option<&str>,
 ) -> Result<Box<dyn Core>> {
-    let (probe, index) = parse_probe(probe);
+    let (probe, dev_specifier) = parse_probe(probe);
 
     match probe {
         "usb" => {
-            let probe_info = get_usb_probe(index)?;
+            let probe_info = get_usb_probe(dev_specifier)?;
 
             let res = probe_info.open();
 
@@ -274,8 +268,10 @@ pub fn attach_to_chip(
         }
 
         "qemu" => {
-            let core = GDBCore::new(GDBServer::Qemu)?;
-            crate::msg!("attached via QEMU GDB server");
+            let core = GDBCore::new(GDBServer::Qemu(
+                dev_specifier.unwrap_or(3333) as u16,
+            ))?;
+            crate::msg!("attached via {:?} GDB server", core.server);
 
             Ok(Box::new(core))
         }

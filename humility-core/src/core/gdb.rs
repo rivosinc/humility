@@ -23,18 +23,27 @@ use crate::core::Core;
 pub enum GDBServer {
     OpenOCD,
     JLink,
-    Qemu,
+    // represents the gdb port since it is configurable
+    Qemu(u16),
 }
+
+const JLINK_PORT: u16 = 2331;
+const OPENOCD_PORT: u16 = 3333;
 
 impl fmt::Display for GDBServer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{}",
+            "{}({})",
             match self {
                 GDBServer::OpenOCD => "OpenOCD",
                 GDBServer::JLink => "JLink",
-                GDBServer::Qemu => "QEMU",
+                GDBServer::Qemu(_port) => "QEMU",
+            },
+            match self {
+                GDBServer::OpenOCD => OPENOCD_PORT,
+                GDBServer::JLink => JLINK_PORT,
+                GDBServer::Qemu(port) => *port,
             }
         )
     }
@@ -42,7 +51,7 @@ impl fmt::Display for GDBServer {
 
 pub struct GDBCore {
     stream: TcpStream,
-    server: GDBServer,
+    pub server: GDBServer,
     halted: bool,
     was_halted: bool,
     reg_table: HashMap<String, u32>,
@@ -184,9 +193,9 @@ impl GDBCore {
 
     pub fn new(server: GDBServer) -> Result<GDBCore> {
         let port = match server {
-            GDBServer::OpenOCD => 3333,
-            GDBServer::JLink => 2331,
-            GDBServer::Qemu => 3333,
+            GDBServer::OpenOCD => OPENOCD_PORT,
+            GDBServer::JLink => JLINK_PORT,
+            GDBServer::Qemu(port) => port,
         };
 
         let host = format!("127.0.0.1:{}", port);
