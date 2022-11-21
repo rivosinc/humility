@@ -246,7 +246,13 @@ pub fn attach_to_chip(
             if let Ok(probe) = attach_to_chip("jlink", hubris, chip) {
                 return Ok(probe);
             }
-            if let Ok(probe) = attach_to_chip("qemu", hubris, chip) {
+
+            // Try the two most common qemu ports
+            if let Ok(probe) = attach_to_chip("qemu-1234", hubris, chip) {
+                return Ok(probe);
+            }
+
+            if let Ok(probe) = attach_to_chip("qemu-3333", hubris, chip) {
                 return Ok(probe);
             }
 
