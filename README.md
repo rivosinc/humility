@@ -13,6 +13,66 @@
 Humility is the debugger for
 <a href="https://github.com/oxidecomputer/hubris">Hubris</a>.
 
+## Installation
+
+### Runtime dependencies
+
+You may want any of the following dependencies depending on how you run hubris.  This can be installed however you like, but some options will be outlined in the following sections.
+- gdb (this must have multi architecture support)
+- openocd
+- qemu (must include your desired architectures). Be aware that `riscv` targets require semihosting support which is not yet in release, but will land in v7.2.0 and is in the master branch.
+
+### Nix
+#### System Requirements
+[nix: the package manager](https://nixos.org/download.html)
+
+#### Installation
+`nix profile install 'github:rivosinc/humility'` 
+
+This will install the latest master branch (see [Avoid building from source](#avoid-building-from-source)).  
+
+#### Runtime Dependencies
+If you would like to also install the runtime dependencies also run:
+
+- `nix profile install nixpkgs#gdb`
+- `nix profile install nixpkgs#openocd`
+- `nix profile install nixpkgs#qemu` or `nix profile install github:rivosinc/qemu/dev/drew/nix` if you need semihosting
+
+This will install multi architecture versions to your system (they will be accesible outside of humility).  
+
+#### Avoid building from source
+
+By default nix will build humility from source.  We can add the binary cache to avoid this. Run this before installing humility from nix:
+
+`nix profile install nixpkgs#cachix && cachix use hubris-humility`
+
+### DIY (from source)
+
+#### System Requirements
+
+To successfully build and install humility from source you need:
+- [rustup](https://rustup.rs/)*
+- cargo-readme (`cargo install cargo-readme`)
+- libusb1 (installation depends on your platform)
+
+\* A word of warning: the system installed version of rust may or may not cause problems and may or may not need to be uninstalled...
+
+#### Installation
+
+`cargo install --git https://github.com/rivosinc/humility.git --locked humility`
+
+or
+
+`git clone https://github.com/rivosinc/humility.git && cargo install --locked --path ./humility`
+
+These both build from source.
+
+#### Dependencies
+On ubuntu:
+- `sudo apt install gdb-multiarch`
+- `sudo apt install openocd`
+- `sudo apt install qemu-system-arm`, adjust for your target platform (There is no riscv qemu in apt right now)
+
 ## Guiding principles
 
 ### Production disposition
@@ -1284,11 +1344,10 @@ will both run OpenOCD and run a foreground GDB that is connected to it.
 
 No documentation yet for `humility pmbus`; pull requests welcome!
 
-<<<<<<< HEAD
 ### `humility pmp`
 
 On riscv platforms the pmp is used to prevent umode access to certain memory regions.
-This tool will decode the pmp csrs and output the memory regions and permisisons.
+This tool will decode the pmp csrs and output the memory regions and permissons.
 Often paired with `humility map`.
 
 To better understand the memory that a task is allowed to access, one can
@@ -1309,11 +1368,14 @@ pmpaddr06        0x0 -       0x1f      20 ----  NAPOT
 pmpaddr07        0x0 -       0x1f      20 ----  NAPOT
 ```
 
+
+
 ### `humility power`
 
 `humility power` displays the values associated with devices that
 can measure voltage, displaying voltage, current (if measured) and
 temperature (if measured).
+
 
 ### `humility probe`
 
