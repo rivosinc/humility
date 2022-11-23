@@ -17,7 +17,10 @@
 //!
 
 use std::fs;
+use std::io::Write;
 use std::process::{Command, Stdio};
+use std::thread;
+use std::time;
 
 use cmd_gdb::gdb;
 use humility::cli::Subcommand;
@@ -42,6 +45,20 @@ struct QemuArgs {
     /// immediatly start a connected gdb shell
     #[clap(long, short)]
     gdb: bool,
+
+    /// Command to run after starting qemu. Will exit qemu when this command is done
+    #[clap(long, short, conflicts_with = "gdb")]
+    command: Option<String>,
+
+    /// How long to wait, in milli-seconds, to run `command` after starting qemu
+    #[clap(
+        long,
+        short,
+        default_value = "300",
+        conflicts_with = "gdb",
+        requires = "command"
+    )]
+    delay: u64,
 }
 
 fn qemu(context: &mut humility::ExecutionContext) -> Result<()> {
@@ -117,12 +134,54 @@ fn qemu(context: &mut humility::ExecutionContext) -> Result<()> {
     }
 
     // Ignore ctrl c so qemu and or gdb can handle it
-    if subargs.gdb {
+    if subargs.gdb || subargs.command.is_some() {
         // start qemu in the background
         cmd.stdin(Stdio::piped());
         let _qemu = Runner(cmd.spawn().context("Could not start 'qemu'")?);
-        // now start gdb
-        gdb(context)?;
+        if subargs.gdb {
+            // now start gdb
+            gdb(context)?;
+        } else if let Some(command) = subargs.command {
+            // we unfornunatly have to contruct a new command from scratch, calling back into the
+            // base humility command parsers would create a circular dependency
+            let my_humility = std::env::current_exe()?;
+            let mut cmd = Command::new(my_humility);
+            cmd.current_dir(work_dir.path());
+            // setup the correct probe to connect to our lanched qemu
+            cmd.arg("-p").arg(format!("qemu-{}", subargs.port));
+
+            // setup correct archive for dump (if avaliable)
+            if let Some(_dump) = &context.cli.dump {
+                // we do not want to pass through the whole dump, just the archive, so extract it
+                // from the dump and pass to subcommand
+                let mut buffer =
+                    fs::File::create(work_dir.path().join("dump_archive.zip"))?;
+                buffer.write_all(hubris.archive())?;
+                cmd.arg("-a").arg("dump_archive.zip");
+            }
+
+            // setup correct archive (if avaliable)
+            if let Some(archive_name) = &context.cli.archive_name {
+                cmd.arg("-a").arg(archive_name);
+            }
+            // setup correct environment (if avaliable)
+            if let Some(environment) = &context.cli.environment {
+                cmd.arg("-e").arg(environment);
+            }
+
+            // add our humility subcommand
+            // We split to allow the command to specify additional flags
+            for arg in command.split(' ') {
+                cmd.arg(arg);
+            }
+
+            thread::sleep(time::Duration::from_millis(subargs.delay));
+
+            let status = cmd.status()?;
+            if !status.success() {
+                anyhow::bail!("command failed: `{}`", command);
+            }
+        }
     } else {
         //turn off ctrl c, qemu can handle it
         ctrlc::set_handler(|| {}).expect("Error setting Ctrl-C handler");
