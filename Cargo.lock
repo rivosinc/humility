@@ -86,7 +86,7 @@ version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c041a8d9751a520ee19656232a18971f18946a7900f1520ee4400002244dd89"
 dependencies = [
- "critical-section",
+ "critical-section 0.2.7",
 ]
 
 [[package]]
@@ -506,6 +506,12 @@ dependencies = [
  "cortex-m",
  "riscv 0.7.0",
 ]
+
+[[package]]
+name = "critical-section"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6548a0ad5d2549e111e1f6a11a6c2e2d00ce6a3dafe22948d67c2b443f775e52"
 
 [[package]]
 name = "crossbeam"
@@ -1513,7 +1519,7 @@ dependencies = [
  "goblin",
  "humility-cmd",
  "humility-core",
- "riscv 0.8.0",
+ "riscv 0.9.1",
 ]
 
 [[package]]
@@ -2760,11 +2766,11 @@ dependencies = [
 
 [[package]]
 name = "riscv"
-version = "0.8.0"
-source = "git+https://github.com/rivosinc/riscv?branch=rivos/dev#10d7b8572d186b887aaa71ef96ce1b26453ac74b"
+version = "0.9.1"
+source = "git+https://github.com/rivosinc/riscv?branch=rivos/dev#d9917932f66cec0fe77dac40a6362afd35ebce2f"
 dependencies = [
- "bare-metal 1.0.0",
  "bit_field",
+ "critical-section 1.1.1",
  "embedded-hal",
  "volatile-register",
 ]
