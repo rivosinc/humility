@@ -114,10 +114,7 @@ fn qemu(context: &mut humility::ExecutionContext) -> Result<()> {
     }
     let qemu_w_args: Vec<&str> = qemu_cmd.split(' ').collect();
 
-    humility::msg!("Running: {}", qemu_cmd);
-
     let mut cmd = Command::new(qemu_w_args[0]);
-    humility::msg!("base cmd: {:?}", cmd);
     cmd.current_dir(work_dir.path());
 
     //skip first word
@@ -137,7 +134,7 @@ fn qemu(context: &mut humility::ExecutionContext) -> Result<()> {
         cmd.stdout(Stdio::null());
     }
 
-    humility::msg!("full cmd: {:?}", cmd);
+    humility::msg!("launching qemu: {:?}", cmd);
 
     // If running with immediate gdb attachment,  need to run qemu in the "background"
     struct Runner(std::process::Child);
