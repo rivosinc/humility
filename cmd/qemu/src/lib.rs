@@ -59,6 +59,10 @@ struct QemuArgs {
         requires = "command"
     )]
     delay: u64,
+
+    /// Hide qemu stdout
+    #[clap(long, short)]
+    silent: bool,
 }
 
 fn qemu(context: &mut humility::ExecutionContext) -> Result<()> {
@@ -121,6 +125,10 @@ fn qemu(context: &mut humility::ExecutionContext) -> Result<()> {
 
     if subargs.wait || subargs.gdb {
         cmd.arg("-S");
+    }
+
+    if subargs.silent {
+        cmd.stdout(Stdio::null());
     }
 
     humility::msg!("full cmd: {:?}", cmd);
