@@ -41,7 +41,7 @@ hex = "0.4.3"
 # We depend on the oxide-stable branch of Oxide's fork of probe-rs to assure
 # that we can float necessary patches on probe-rs.
 #
-probe-rs = { git = "https://github.com/oxidecomputer/probe-rs.git", branch = "oxide-v0.12.0" }
+probe-rs = { git = "https://github.com/rivosinc/probe-rs.git", branch = "dev/drew/oxide_with_csr_verif" }
 
 #
 # We need the fix for https://github.com/capstone-rust/capstone-rs/issues/84,

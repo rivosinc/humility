@@ -1167,7 +1167,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "parse_int",
- "probe-rs",
+ "probe-rs 0.12.0 (git+https://github.com/oxidecomputer/probe-rs.git?branch=oxide-v0.12.0)",
  "strum 0.22.0",
  "strum_macros 0.22.0",
  "zerocopy",
@@ -1907,7 +1907,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "parse_int",
- "probe-rs",
+ "probe-rs 0.12.0 (git+https://github.com/rivosinc/probe-rs.git?branch=dev/drew/oxide_with_csr_verif)",
  "regex",
  "roxmltree",
  "rusb",
@@ -2572,6 +2572,37 @@ checksum = "7c68cb38ed13fd7bc9dd5db8f165b7c8d9c1a315104083a2b10f11354c2af97f"
 [[package]]
 name = "probe-rs"
 version = "0.12.0"
+source = "git+https://github.com/rivosinc/probe-rs.git?branch=dev/drew/oxide_with_csr_verif#8136dc7ff62e94384fb4d739e2369c17a59c9ac9"
+dependencies = [
+ "anyhow",
+ "base64",
+ "bincode",
+ "bitfield",
+ "bitvec",
+ "enum-primitive-derive",
+ "gimli 0.26.2",
+ "hidapi",
+ "ihex",
+ "jaylink",
+ "jep106",
+ "log",
+ "num-traits",
+ "object 0.27.1",
+ "once_cell",
+ "probe-rs-target 0.12.0 (git+https://github.com/rivosinc/probe-rs.git?branch=dev/drew/oxide_with_csr_verif)",
+ "rusb",
+ "scroll",
+ "serde",
+ "serde_yaml",
+ "static_assertions",
+ "svg",
+ "thiserror",
+ "thousands",
+]
+
+[[package]]
+name = "probe-rs"
+version = "0.12.0"
 source = "git+https://github.com/oxidecomputer/probe-rs.git?branch=oxide-v0.12.0#6ff8fae61fb1e74c87d2ba160071b1989ca64bba"
 dependencies = [
  "anyhow",
@@ -2589,7 +2620,7 @@ dependencies = [
  "num-traits",
  "object 0.27.1",
  "once_cell",
- "probe-rs-target",
+ "probe-rs-target 0.12.0 (git+https://github.com/oxidecomputer/probe-rs.git?branch=oxide-v0.12.0)",
  "rusb",
  "scroll",
  "serde",
@@ -2598,6 +2629,16 @@ dependencies = [
  "svg",
  "thiserror",
  "thousands",
+]
+
+[[package]]
+name = "probe-rs-target"
+version = "0.12.0"
+source = "git+https://github.com/rivosinc/probe-rs.git?branch=dev/drew/oxide_with_csr_verif#8136dc7ff62e94384fb4d739e2369c17a59c9ac9"
+dependencies = [
+ "base64",
+ "jep106",
+ "serde",
 ]
 
 [[package]]
