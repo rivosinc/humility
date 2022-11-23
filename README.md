@@ -1472,6 +1472,12 @@ The `--wait` option instructs qemu to wait for a gdb client to connect
 
 The `--gdb` option can be used to launch qemu and then open a gdb console connected to it
 
+The `--silent` option will hide qemu's stdout
+
+The `--command` option specifies another humility command to run after launching qemu
+
+The `--delay` option is how long to wait, in ms,  before running `command`
+
 This works by parsing the qemu.sh file within the chip folder
 (`<hubris>/chips/<chipname>/qemu.sh`), then adding additional args to configure gdb
 
