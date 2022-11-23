@@ -126,8 +126,8 @@ fn pmpcmd(context: &mut humility::ExecutionContext) -> Result<()> {
             Mode::NAPOT => println!(
                 "pmpaddr{:02} {:#10x} - {:#10x} {:#7x} {}{}{}{:<2} {:#5?}",
                 i,
-                addr,
-                addr + (size.unwrap().get()) - 1,
+                addr.unwrap(),
+                addr.unwrap() + (size.unwrap().get()) - 1,
                 size.unwrap(),
                 if cfg.get_permission() as u8 & 0x1 != 0 { "r" } else { "-" },
                 if cfg.get_permission() as u8 & 0x2 != 0 { "w" } else { "-" },
@@ -138,8 +138,8 @@ fn pmpcmd(context: &mut humility::ExecutionContext) -> Result<()> {
             Mode::NA4 => println!(
                 "pmpaddr{:02} {:#10x} - {:#10x} {:7x} {}{}{}{:<2} {:#5?}",
                 i,
-                addr,
-                addr + 4 - 1,
+                addr.unwrap(),
+                addr.unwrap() + 4 - 1,
                 4,
                 if cfg.get_permission() as u8 & 0x1 != 0 { "r" } else { "-" },
                 if cfg.get_permission() as u8 & 0x2 != 0 { "w" } else { "-" },
@@ -153,14 +153,14 @@ fn pmpcmd(context: &mut humility::ExecutionContext) -> Result<()> {
                     0
                 } else {
                     // the 0 element is the address
-                    pmpaddrs[i - 1].decode(Mode::TOR).0
+                    pmpaddrs[i - 1].decode(Mode::TOR).0.unwrap()
                 };
                 println!(
                     "pmpaddr{:02} {:#10x} - {:#10x} {:7x} {}{}{}{:<2} {:#5?}",
                     i,
                     start,
-                    addr - 1,
-                    addr - start - 1,
+                    addr.unwrap() - 1,
+                    addr.unwrap() - start - 1,
                     if cfg.get_permission() as u8 & 0x1 != 0 {
                         "r"
                     } else {
