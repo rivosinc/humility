@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use probe_rs::architecture::arm::component::TraceSink;
 use probe_rs::flashing;
 use probe_rs::MemoryInterface;
 
@@ -96,12 +97,12 @@ impl Core for ProbeCore {
         if let Some(range) = self.unhalted_read.range(..=addr).next_back() {
             if addr + 4 < range.0 + range.1 {
                 let mut core = self.session.core(0)?;
-                return Ok(core.read_word_32(addr)?);
+                return Ok(core.read_word_32(addr.into())?);
             }
         }
 
         self.halt_and_read(|core| {
-            rval = core.read_word_32(addr)?;
+            rval = core.read_word_32(addr.into())?;
             Ok(())
         })?;
 
@@ -117,28 +118,22 @@ impl Core for ProbeCore {
         if let Some(range) = self.unhalted_read.range(..=addr).next_back() {
             if addr + (data.len() as u32) < range.0 + range.1 {
                 let mut core = self.session.core(0)?;
-                return Ok(core.read_8(addr, data)?);
+                return Ok(core.read_8(addr.into(), data)?);
             }
         }
 
-        self.halt_and_read(|core| Ok(core.read_8(addr, data)?))
+        self.halt_and_read(|core| Ok(core.read_8(addr.into(), data)?))
     }
 
-    // TODO need to bump probe-rs version to support 64bit values
-    // for now just upcast everything to match the interface
     fn read_reg(&mut self, reg: Register) -> Result<u64> {
         let mut core = self.session.core(0)?;
         let reg_id = Register::to_u16(&reg).unwrap();
 
         use num_traits::ToPrimitive;
 
-        Ok(core.read_core_reg(Into::<probe_rs::CoreRegisterAddress>::into(
-            reg_id,
-        ))? as u64)
+        Ok(core.read_core_reg(Into::<probe_rs::RegisterId>::into(reg_id))?)
     }
 
-    // TODO need to bump probe-rs version to support 64bit values
-    // for now just upcast everything to match the interface
     fn write_reg(&mut self, reg: Register, value: u64) -> Result<()> {
         let mut core = self.session.core(0)?;
         let reg_id = Register::to_u16(&reg).unwrap();
@@ -146,7 +141,7 @@ impl Core for ProbeCore {
         use num_traits::ToPrimitive;
 
         core.write_core_reg(
-            Into::<probe_rs::CoreRegisterAddress>::into(reg_id),
+            Into::<probe_rs::RegisterId>::into(reg_id),
             value as u32,
         )?;
 
@@ -155,13 +150,13 @@ impl Core for ProbeCore {
 
     fn write_word_32(&mut self, addr: u32, data: u32) -> Result<()> {
         let mut core = self.session.core(0)?;
-        core.write_word_32(addr, data)?;
+        core.write_word_32(addr.into(), data)?;
         Ok(())
     }
 
     fn write_8(&mut self, addr: u32, data: &[u8]) -> Result<()> {
         let mut core = self.session.core(0)?;
-        core.write_8(addr, data)?;
+        core.write_8(addr.into(), data)?;
         Ok(())
     }
 
@@ -196,19 +191,19 @@ impl Core for ProbeCore {
         use probe_rs::architecture::arm::swo::SwoConfig;
 
         let config = SwoConfig::new(0).set_baud(2_000_000);
-        self.session.setup_swv(0, &config)?;
+        self.session.setup_tracing(0, TraceSink::Swo(config))?;
 
         //
         // Because the probe can have sticky errors, we perform one read
         // (and discard the results) to assure that any further errors
         // are legit.
         //
-        let _discard = self.session.read_swo();
+        let _discard = self.session.read_trace_data();
         Ok(())
     }
 
     fn read_swv(&mut self) -> Result<Vec<u8>> {
-        Ok(self.session.read_swo()?)
+        Ok(self.session.read_trace_data()?)
     }
 
     fn load(&mut self, path: &Path) -> Result<()> {

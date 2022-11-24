@@ -25,7 +25,7 @@ toml = "0.5"
 bitfield = "0.13.2"
 log = {version = "0.4.8", features = ["std"]}
 zip = "0.5"
-rusb = "0.8.1"
+rusb = "0.9.0"
 parse_int = "0.4.0"
 idol = {git = "https://github.com/oxidecomputer/idolatry.git"}
 regex = "1.5"
@@ -41,7 +41,7 @@ hex = "0.4.3"
 # We depend on the oxide-stable branch of Oxide's fork of probe-rs to assure
 # that we can float necessary patches on probe-rs.
 #
-probe-rs = { git = "https://github.com/oxidecomputer/probe-rs.git", branch = "oxide-v0.12.0" }
+probe-rs = { git = "https://github.com//probe-rs/probe-rs", branch = "master" }
 
 #
 # We need the fix for https://github.com/capstone-rust/capstone-rs/issues/84,

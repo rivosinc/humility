@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use probe_rs::Probe;
+use probe_rs::{Permissions, Probe};
 
 use anyhow::{anyhow, bail, Result};
 
@@ -203,10 +203,11 @@ pub fn attach_to_chip(
             // attempted).
             //
             let (session, can_flash) = match chip {
-                Some(chip) => (probe.attach(chip)?, true),
+                Some(chip) => (probe.attach(chip, Permissions::new())?, true),
                 None => (
                     probe.attach(
                         hubris.arch.as_ref().unwrap().get_generic_chip(),
+                        Permissions::new(),
                     )?,
                     false,
                 ),
@@ -298,10 +299,13 @@ pub fn attach_to_chip(
                 // why we use armv7m here.
                 //
                 let (session, can_flash) = match chip {
-                    Some(chip) => (probe.attach(chip)?, true),
+                    Some(chip) => {
+                        (probe.attach(chip, Permissions::new())?, true)
+                    }
                     None => (
                         probe.attach(
                             hubris.arch.as_ref().unwrap().get_generic_chip(),
+                            Permissions::new(),
                         )?,
                         false,
                     ),

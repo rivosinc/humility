@@ -180,7 +180,7 @@ indexmap = { version = "1.7", features = ["serde-1"] }
 reedline = "0.3.0"
 
 [patch.crates-io]
-libusb1-sys = { git = "https://github.com/rivosinc/rusb", branch = "dev/drew/static_lib_fix" }
+libusb1-sys = { git = "https://github.com/rivosinc/rusb", branch = "dev/zheren/test_bump_probe-rs" }
 hidapi = { git = "https://github.com/oxidecomputer/hidapi-rs", branch = "oxide-stable" }
 
 [dev-dependencies]

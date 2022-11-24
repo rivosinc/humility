@@ -18,4 +18,4 @@ strum_macros = "0.22"
 parse_int = "0.4.0"
 byteorder = "1.3.4"
 zerocopy = "0.6.1"
-probe-rs = { git = "https://github.com/oxidecomputer/probe-rs.git", branch = "oxide-v0.12.0" }
+probe-rs = { git = "https://github.com//probe-rs/probe-rs", branch = "master" }
