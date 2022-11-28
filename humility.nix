@@ -17,7 +17,7 @@ rustPlatform.buildRustPackage rec {
 
   name = "humility";
 
-  cargoSha256 = "sha256-KTMPx2zjaY4eXfxkwLhOJ6F4xtxFBqoenPNQycBAgw8";
+  cargoSha256 = "sha256-ecMEVTi1uFBZToyDhczzu6QuKzjcXI2so4draQKwXmk";
 
   nativeBuildInputs =
     [
