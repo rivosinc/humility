@@ -75,7 +75,8 @@
           libusb1
         ]
         # this is needed for libudev
-        ++ lib.optionals pkgs.stdenv.isLinux [pkgs.systemd];
+        ++ lib.optionals pkgs.stdenv.isLinux [pkgs.systemd]
+        ++ lib.optionals stdenv.isDarwin [darwin.apple_sdk.frameworks.AppKit];
     };
 
     checks = {
