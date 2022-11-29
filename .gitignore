@@ -3,5 +3,8 @@ result
 .cargo/.package-cache
 .cargo/git/
 .cargo/registry/
+.cargo/bin/
+.direnv/
+.envrc
 .pre-commit-config.yaml
 
