@@ -1,0 +1,4 @@
+humility qemu failed: No 'qemu.sh' archive found in the hubris archive
+
+Caused by:
+    failed to find 'debug/qemu.sh': specified file not found in archive
