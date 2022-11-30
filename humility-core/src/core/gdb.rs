@@ -19,7 +19,7 @@ use xmlparser::{Token, Tokenizer};
 
 use crate::core::Core;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum GDBServer {
     OpenOCD,
     JLink,
