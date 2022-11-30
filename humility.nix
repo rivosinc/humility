@@ -8,6 +8,7 @@
   AppKit ? null,
   libusb1,
   cargo-readme,
+  qemu,
   src,
   version,
   doCheck ? false,
@@ -33,6 +34,10 @@ rustPlatform.buildRustPackage rec {
       cargo-readme
     ]
     ++ lib.optionals stdenv.isLinux [systemd];
+
+  checkInputs = [
+    qemu
+  ];
 
   checkPhase = ''
     ${cargo}/bin/cargo fmt --all --check
