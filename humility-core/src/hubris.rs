@@ -282,7 +282,7 @@ pub struct HubrisFlashConfig {
     pub elf: Vec<u8>,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum HubrisArchiveDoneness {
     /// Fully load archive
     Cook,
@@ -3761,7 +3761,7 @@ impl HubrisArchive {
         let regions = self.regions(core)?;
         let nsegs = regions
             .values()
-            .fold(0, |ttl, r| ttl + if !r.attr.device { 1 } else { 0 });
+            .fold(0, |ttl, r| ttl + usize::from(!r.attr.device));
 
         macro_rules! pad {
             ($size:expr) => {
@@ -4203,7 +4203,7 @@ impl HubrisArchive {
         let archive = zip::ZipArchive::new(cursor)?;
         Self::for_each_task(archive, |path, buffer| {
             let file_name = p.join(path.file_name().unwrap());
-            std::fs::write(file_name, &buffer)?;
+            std::fs::write(file_name, buffer)?;
             Ok(())
         })?;
         Ok(())
@@ -4629,7 +4629,7 @@ pub struct HubrisEnumVariant {
     pub tag: Option<u64>,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum HubrisDiscriminant {
     Expected(HubrisGoff),
     Value(HubrisGoff, usize),
@@ -5055,7 +5055,7 @@ impl HubrisPrintFormat {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum HubrisValidate {
     ArchiveMatch,
     Booted,
