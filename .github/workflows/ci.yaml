@@ -142,4 +142,4 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --profile=ci -- -D warnings
+          args: --all --profile=ci -- -D warnings

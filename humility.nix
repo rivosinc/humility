@@ -36,7 +36,7 @@ rustPlatform.buildRustPackage rec {
 
   checkPhase = ''
     ${cargo}/bin/cargo fmt --all --check
-    ${cargo}/bin/cargo clippy --profile=ci -- -D warnings
+    ${cargo}/bin/cargo clippy --all --profile=ci -- -D warnings
     ${cargo}/bin/cargo test
   '';
 
