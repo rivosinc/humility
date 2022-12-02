@@ -109,6 +109,25 @@ impl Core for ProbeCore {
         Ok(rval)
     }
 
+    fn read_word_64(&mut self, addr: u32) -> Result<u64> {
+        log::trace!("reading word at {:x}", addr);
+        let mut rval = 0;
+
+        if let Some(range) = self.unhalted_read.range(..=addr).next_back() {
+            if addr + 8 < range.0 + range.1 {
+                let mut core = self.session.core(0)?;
+                return Ok(core.read_word_64(addr.into())?);
+            }
+        }
+
+        self.halt_and_read(|core| {
+            rval = core.read_word_64(addr.into())?;
+            Ok(())
+        })?;
+
+        Ok(rval)
+    }
+
     fn read_8(&mut self, addr: u32, data: &mut [u8]) -> Result<()> {
         if data.len() > CORE_MAX_READSIZE {
             bail!("read of {} bytes at 0x{:x} exceeds max of {}",
