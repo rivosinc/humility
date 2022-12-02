@@ -39,7 +39,7 @@ fn make_readme() -> Result<()> {
         }
     }
 
-    let root = std::path::PathBuf::from(metadata.workspace_root);
+    let root = metadata.workspace_root;
     let input = std::fs::read(root.join("README.md.in"))?;
     let mut output = File::create(root.join("README.md"))?;
 
