@@ -50,6 +50,10 @@ struct GdbArgs {
     /// specifies the probe serial number to use with OpenOCD
     #[clap(long, requires = "run_openocd")]
     serial: Option<String>,
+
+    /// skip checking the image id
+    #[clap(long, short)]
+    skip_check: bool,
 }
 
 fn extract_elf_dir(work_dir: &TempDir) -> Result<String> {
@@ -194,7 +198,7 @@ pub fn gdb(context: &mut humility::ExecutionContext) -> Result<()> {
     // cases have in common: GDB.  Also, GDB is _terrible_: `print/x` doesn't
     // work if we're attached to the target and have all of our sections
     // loaded.
-    if !subargs.load {
+    if !subargs.load && !subargs.skip_check {
         let mut cmd = Command::new(gdb_cmd);
         let image_id_addr = hubris.image_id_addr().unwrap();
         let image_id = hubris.image_id().unwrap();
