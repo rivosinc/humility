@@ -7,10 +7,10 @@
 //! Humility allows for some (well-defined) manipulation of tasks via `jefe`,
 //! the Hubris supervisor.  By default, `jefe` will restart any faulting task;
 //! when debugging, it can be useful to hold a task in the faulted state. This
-//! is done via the `-h` option:
+//! is done via the `-H` option:
 //!
 //! ```console
-//! % humility jefe -h ping
+//! % humility jefe -H ping
 //! humility: attached via ST-Link
 //! humility: successfully changed disposition for ping
 //! ```
