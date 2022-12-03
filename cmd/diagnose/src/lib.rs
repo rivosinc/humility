@@ -96,9 +96,7 @@ fn diagnose(context: &mut humility::ExecutionContext) -> Result<()> {
     println!("Taking initial snapshot of task status...");
 
     // Mise en place:
-    let base = core.read_word_32(hubris.lookup_symword("TASK_TABLE_BASE")?)?;
-    let task_count =
-        core.read_word_32(hubris.lookup_symword("TASK_TABLE_SIZE")?)? as usize;
+    let (base, task_count) = hubris.task_table(core)?;
     let task_t = hubris.lookup_struct_byname("Task")?.clone();
 
     // Park the core so that we don't have stuff changing out from under us.
@@ -113,7 +111,7 @@ fn diagnose(context: &mut humility::ExecutionContext) -> Result<()> {
     );
 
     // Read the initial task table snapshot.
-    let tasks_0 = load_tcbs(hubris, core, base, task_count, &task_t)?;
+    let tasks_0 = load_tcbs(hubris, core, base, task_count as usize, &task_t)?;
     // Load the descriptors; these are not expected to change.
     let descs = load_task_descs(hubris, core, &tasks_0)?;
     // Find the names for each descriptor; these too are not expected to change.
@@ -198,7 +196,7 @@ fn diagnose(context: &mut humility::ExecutionContext) -> Result<()> {
 
     // Take a new snapshot.
     let ticks_1 = core.read_word_64(hubris.lookup_variable("TICKS")?.addr)?;
-    let tasks_1 = load_tcbs(hubris, core, base, task_count, &task_t)?;
+    let tasks_1 = load_tcbs(hubris, core, base, task_count as usize, &task_t)?;
 
     // Note: we are leaving core halted here.
 
@@ -325,7 +323,8 @@ fn diagnose(context: &mut humility::ExecutionContext) -> Result<()> {
         core.halt()?;
 
         println!("Results for these tasks::");
-        let tasks_2 = load_tcbs(hubris, core, base, task_count, &task_t)?;
+        let tasks_2 =
+            load_tcbs(hubris, core, base, task_count as usize, &task_t)?;
         for (name, i) in tasks_worth_holding {
             let i = u32::from(i) as usize;
             if let TaskState::Faulted { fault, original_state } =
