@@ -268,4 +268,15 @@ impl Arch for RVArch {
 
         rval
     }
+
+    fn get_gdbs(&self) -> &[&str] {
+        &[
+            "riscv32-none-elf-gdb",
+            "riscv32-unknown-elf-gdb",
+            "riscv64-none-elf-gdb",
+            "riscv64-unknown-elf-gdb",
+            "gdb-multi-arch",
+            "gdb",
+        ]
+    }
 }

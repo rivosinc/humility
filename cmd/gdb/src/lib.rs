@@ -130,14 +130,7 @@ pub fn gdb(context: &mut humility::ExecutionContext) -> Result<()> {
 
     let mut gdb_cmd = None;
 
-    const GDB_NAMES: [&str; 5] = [
-        "arm-none-eabi-gdb",
-        "riscv32-none-elf-gdb",
-        "riscv32-unknown-elf-gdb",
-        "gdb-multiarch",
-        "gdb",
-    ];
-    for candidate in &GDB_NAMES {
+    for candidate in hubris.arch.as_ref().unwrap().get_gdbs() {
         if Command::new(candidate)
             .arg("--version")
             .stdout(Stdio::piped())
@@ -151,7 +144,10 @@ pub fn gdb(context: &mut humility::ExecutionContext) -> Result<()> {
 
     // Select the GDB command
     let gdb_cmd = gdb_cmd.ok_or_else(|| {
-        anyhow::anyhow!("GDB not found.  Tried: {:?}", GDB_NAMES)
+        anyhow::anyhow!(
+            "GDB not found.  Tried: {:?}",
+            hubris.arch.as_ref().unwrap().get_gdbs()
+        )
     })?;
 
     // If OpenOCD is requested, then run it in a subprocess here, with an RAII

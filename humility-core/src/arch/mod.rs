@@ -110,6 +110,9 @@ pub trait Arch {
         cs: &Capstone,
         isntr: &capstone::Insn,
     ) -> Option<HubrisTarget>;
+
+    /// Returns a list of possible GDB executable names for this architeture
+    fn get_gdbs(&self) -> &[&str];
 }
 
 impl Debug for dyn Arch {
