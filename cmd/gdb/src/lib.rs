@@ -58,6 +58,10 @@ struct GdbArgs {
     /// what gdb port to connect on
     #[clap(long, short, default_value = "3333")]
     port: u16,
+
+    /// specifies the 'gdb' executable to run
+    #[clap(long)]
+    gdb: Option<String>,
 }
 
 fn extract_elf_dir(work_dir: &TempDir) -> Result<String> {
@@ -128,27 +132,33 @@ pub fn gdb(context: &mut humility::ExecutionContext) -> Result<()> {
     hubris
         .extract_file_to("img/final.elf", &work_dir.path().join("final.elf"))?;
 
-    let mut gdb_cmd = None;
+    // if the user did not specify, just check all possible gdbs for the architecture
+    let gdb_cmd: String = subargs.gdb.unwrap_or_else(|| {
+        let mut gdb_cmd = None;
 
-    for candidate in hubris.arch.as_ref().unwrap().get_gdbs() {
-        if Command::new(candidate)
-            .arg("--version")
-            .stdout(Stdio::piped())
-            .status()
-            .is_ok()
-        {
-            gdb_cmd = Some(candidate);
-            break;
+        for candidate in hubris.arch.as_ref().unwrap().get_gdbs() {
+            if Command::new(candidate)
+                .arg("--version")
+                .stdout(Stdio::piped())
+                .status()
+                .is_ok()
+            {
+                gdb_cmd = Some(candidate);
+                break;
+            }
         }
-    }
 
-    // Select the GDB command
-    let gdb_cmd = gdb_cmd.ok_or_else(|| {
-        anyhow::anyhow!(
-            "GDB not found.  Tried: {:?}",
-            hubris.arch.as_ref().unwrap().get_gdbs()
-        )
-    })?;
+        // Select the GDB command
+        let gdb_cmd: &str = gdb_cmd
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "GDB not found.  Tried: {:?}",
+                    hubris.arch.as_ref().unwrap().get_gdbs()
+                )
+            })
+            .unwrap();
+        gdb_cmd.to_owned()
+    });
 
     // If OpenOCD is requested, then run it in a subprocess here, with an RAII
     // handle to ensure that it's killed before the program exits.
@@ -199,7 +209,7 @@ pub fn gdb(context: &mut humility::ExecutionContext) -> Result<()> {
     // work if we're attached to the target and have all of our sections
     // loaded.
     if !subargs.load && !subargs.skip_check {
-        let mut cmd = Command::new(gdb_cmd);
+        let mut cmd = Command::new(&gdb_cmd);
         let image_id_addr = hubris.image_id_addr().unwrap();
         let image_id = hubris.image_id().unwrap();
         cmd.arg("-q")
@@ -232,7 +242,7 @@ pub fn gdb(context: &mut humility::ExecutionContext) -> Result<()> {
         }
     }
 
-    let mut cmd = Command::new(gdb_cmd);
+    let mut cmd = Command::new(&gdb_cmd);
     cmd.arg("-q")
         .arg("-x")
         .arg("script.gdb")
