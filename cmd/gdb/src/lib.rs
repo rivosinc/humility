@@ -54,6 +54,10 @@ struct GdbArgs {
     /// skip checking the image id
     #[clap(long, short)]
     skip_check: bool,
+
+    /// what gdb port to connect on
+    #[clap(long, short, default_value = "3333")]
+    port: u16,
 }
 
 fn extract_elf_dir(work_dir: &TempDir) -> Result<String> {
@@ -203,8 +207,8 @@ pub fn gdb(context: &mut humility::ExecutionContext) -> Result<()> {
         let image_id_addr = hubris.image_id_addr().unwrap();
         let image_id = hubris.image_id().unwrap();
         cmd.arg("-q")
-            .arg("-x")
-            .arg("openocd.gdb")
+            .arg("-ex")
+            .arg(format!("target extended-remote :{}", subargs.port))
             .arg("-ex")
             .arg(format!(
                 "dump binary memory image_id {} {}",
@@ -233,7 +237,21 @@ pub fn gdb(context: &mut humility::ExecutionContext) -> Result<()> {
     }
 
     let mut cmd = Command::new(gdb_cmd);
-    cmd.arg("-q").arg("-x").arg("script.gdb").arg("-x").arg("openocd.gdb");
+    cmd.arg("-q")
+        .arg("-x")
+        .arg("script.gdb")
+        .arg("-ex")
+        .arg(format!("target extended-remote :{}", subargs.port))
+        // print demangled symbols
+        .arg("-ex")
+        .arg("set print asm-demangle on")
+        // prevent infiniti backtrace loops
+        .arg("-ex")
+        .arg("set backtrace limit 32")
+        // most debugging will appreciate hex prints
+        .arg("-ex")
+        .arg("set radix 16");
+
     if subargs.load {
         // start the process but immediately halt the processor
         cmd.arg("-ex")
