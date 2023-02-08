@@ -399,6 +399,10 @@ impl Arch for ARMArch {
 
         rval
     }
+
+    fn get_gdbs(&self) -> &[&str] {
+        &["arm-none-eabi-gdb", "gdb-multi-arch", "gdb"]
+    }
 }
 
 /// Looks up the jump target type of the previously-disassembled instruction
