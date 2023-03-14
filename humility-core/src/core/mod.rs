@@ -9,8 +9,7 @@ mod dump;
 pub use dump::DumpCore;
 
 mod gdb;
-pub use gdb::GDBCore;
-use gdb::GDBServer;
+pub use gdb::{GDBCore, GDBServer};
 
 mod openocd;
 pub use openocd::OpenOCDCore;

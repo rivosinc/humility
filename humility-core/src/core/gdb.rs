@@ -12,6 +12,7 @@ use std::net::TcpStream;
 use std::path::Path;
 use std::str;
 use std::time::Duration;
+use strum_macros::Display;
 use xmlparser::{Token, Tokenizer};
 
 use super::Core;
@@ -47,17 +48,25 @@ impl fmt::Display for GDBServer {
     }
 }
 
+#[derive(Display, PartialEq)]
+enum GDBResponse {
+    Ack,
+    Data(String),
+}
+
 pub struct GDBCore {
     stream: TcpStream,
     pub server: GDBServer,
     halted: bool,
     was_halted: bool,
     reg_table: HashMap<String, u32>,
+    max_data_size: usize,
 }
 
 const GDB_PACKET_START: char = '$';
 const GDB_PACKET_END: char = '#';
 const GDB_PACKET_ACK: char = '+';
+const GDB_MAX_HEADER_LEN: usize = 32;
 
 #[rustfmt::skip::macros(anyhow, bail)]
 impl GDBCore {
@@ -65,7 +74,6 @@ impl GDBCore {
         let mut payload = vec![GDB_PACKET_START as u8];
 
         let mut cksum = 0;
-
         for b in cmd.as_bytes() {
             payload.push(*b);
             cksum += *b as u32;
@@ -92,31 +100,27 @@ impl GDBCore {
         Ok(())
     }
 
-    // GDB support is still WIP, so may need later
-    #[allow(unused)]
-    fn recvack(&mut self) -> Result<()> {
-        let mut rbuf = vec![0; 1];
-
-        let rval = self.stream.read(&mut rbuf)?;
-        // should get ACK, aka '+' or 0x2b
-        // ensure we got our 1 byte
-        ensure!(rval == 1);
-        // ensure that byte is the the ack
-        ensure!(rbuf[0] == GDB_PACKET_ACK as u8);
-        log::trace!("received ack");
-        Ok(())
-    }
-
     fn sendack(&mut self) -> Result<()> {
         self.stream.write_all(&[GDB_PACKET_ACK as u8])?;
         log::trace!("sending ack");
         Ok(())
     }
 
-    fn recvdata(&mut self) -> Result<String> {
+    fn recvdata(&mut self) -> Result<GDBResponse> {
         let mut rbuf = vec![0; 1024];
         let mut result = String::new();
 
+        let rval = self.stream.read(&mut rbuf[..1])?;
+        // ensure we got our 1 byte
+        ensure!(rval == 1);
+
+        // is it a Ack
+        if rbuf[0] == GDB_PACKET_ACK as u8 {
+            return Ok(GDBResponse::Ack);
+        }
+
+        // Not a ack, should be a start packet
+        ensure!(rbuf[0] == GDB_PACKET_START as u8);
         log::trace!("reading first chunk");
         loop {
             let rval = self.stream.read(&mut rbuf)?;
@@ -139,54 +143,51 @@ impl GDBCore {
             log::trace!("reading more data");
         }
 
-        //
-        // In our result, we should have exactly one opening and exactly
-        // one closing delimiter -- and, if expectack is set, at least
-        // one ACK as well.
-        //
-        let start = match result.find(GDB_PACKET_START) {
-            Some(ndx) => ndx,
-            None => {
-                bail!("missing start of packet: \"{}\"", result);
-            }
-        };
-
-        //
-        // By merits of being here, we know we have our end-of-packet...
-        //
         let end = result.find(GDB_PACKET_END).unwrap();
+        // compute cksum
 
-        if end < start {
-            bail!("start/end inverted: \"{}\"", result);
+        let mut cksum = 0;
+        for b in result[..end].as_bytes() {
+            cksum += *b as u32;
         }
+        let trailer = &format!("{}{:02x}", GDB_PACKET_END, cksum % 256);
+        ensure!(trailer == &result[end..]);
+        self.sendack()?;
 
-        Ok(result[start + 1..end].to_string())
+        Ok(GDBResponse::Data(result[..end].to_string()))
     }
 
     fn sendcmd(&mut self, cmd: &str) -> Result<String> {
         let mut just_halted = false;
         self.firecmd(cmd)?;
-        self.recvack()?;
 
-        let mut data = self.recvdata()?;
-        // if core halted
-        if data.contains("T02thread") {
+        let mut response = self.recvdata()?;
+        if let GDBResponse::Data(data) = response {
+            ensure!(data.contains("T02thread"));
+
+            // if core halted
             self.halted = true;
             just_halted = true;
-            self.sendack()?;
             log::trace!("halted: trying again");
             self.firecmd(cmd)?;
-            data = self.recvdata()?;
+            response = self.recvdata()?;
         }
-        if just_halted {
-            self.firecmd("c")?;
-            self.halted = false;
+        ensure!(response == GDBResponse::Ack);
+        let response = self.recvdata()?;
+        if let GDBResponse::Data(data) = response {
+            if just_halted {
+                self.firecmd("c")?;
+                ensure!(self.recvdata()? == GDBResponse::Ack);
+                self.halted = false;
+            }
+
+            if data.len() == 3 && data.starts_with('E') {
+                bail!("received error code: {}", data)
+            } else {
+                return Ok(data);
+            }
         }
-        if data.len() == 3 && data.starts_with('E') {
-            bail!("received error code: {}", data)
-        } else {
-            Ok(data)
-        }
+        bail!("Expected Data, got Ack");
     }
 
     pub(super) fn new(server: GDBServer) -> Result<GDBCore> {
@@ -226,6 +227,7 @@ impl GDBCore {
             halted: true,
             was_halted: true,
             reg_table: HashMap::new(),
+            max_data_size: 0,
         };
 
         let data = core.recvdata();
@@ -234,7 +236,7 @@ impl GDBCore {
                 log::trace!("connected to halted core");
                 core.was_halted = true;
             }
-            Ok(data) => {
+            Ok(GDBResponse::Data(data)) => {
                 // When gdb halts the core, it sends this packet back.
                 // [Here](https://sourceware.org/gdb/onlinedocs/gdb/Stop-Reply-Packets.html#Stop-Reply-Packets) is the reference for decoding.
                 // It is decoded to mean that thread 1 halted.
@@ -246,9 +248,18 @@ impl GDBCore {
                 log::trace!("connected to running core");
                 core.was_halted = false;
             }
+            Ok(GDBResponse::Ack) => bail!("Unexpected Ack received"),
         };
 
         let supported = core.sendcmd("qSupported")?;
+        let mut iter =
+            supported.split(';').filter(|f| f.starts_with("PacketSize="));
+        if let Some(field) = iter.next() {
+            core.max_data_size =
+                field[11..].parse::<usize>()? - GDB_MAX_HEADER_LEN;
+        } else {
+            bail!("Missing max packet size in supported features");
+        }
         log::trace!("{} supported string: {}", server, supported);
         // need to call to enable single register reads
         // see: https://github.com/qemu/qemu/blob/e750a7ace492f0b450653d4ad368a77d6f660fb8/gdbstub/gdbstub.c#L1600
@@ -423,25 +434,28 @@ impl Core for GDBCore {
     }
 
     fn write_8(&mut self, addr: u32, data: &[u8]) -> Result<()> {
-        let cmd = format!(
-            "M{:x},{:x}:{}",
-            addr,
-            data.len(),
-            data.encode_hex::<String>()
-        );
+        // if data is too long, split it
+        for (idx, chunk) in data.chunks(self.max_data_size).enumerate() {
+            let chunk_addr = addr + (idx * self.max_data_size) as u32;
+            let cmd = format!(
+                "M{:x},{:x}:{}",
+                chunk_addr,
+                chunk.len(),
+                chunk.encode_hex::<String>()
+            );
 
-        let rstr = self.sendcmd(&cmd)?;
-        match rstr.as_str() {
-            "OK" => Ok(()),
-            _ => bail!("invalid write response"),
+            let rstr = self.sendcmd(&cmd)?;
+            ensure!(rstr == "OK", "Invalid write response");
         }
+        Ok(())
     }
 
     fn halt(&mut self) -> Result<()> {
-        //target is halted whenever a command is sent, so just send help
+        //target is halted whenever a character is sent, so just send a random byte
         log::trace!("halting");
-        self.firecmd("h")?;
+        self.stream.write_all(&[42u8])?;
         let reply = self.recvdata()?;
+        ensure!(reply != GDBResponse::Ack);
         log::trace!("halt reply: {}", reply);
         self.halted = true;
         Ok(())
@@ -458,6 +472,7 @@ impl Core for GDBCore {
         if self.halted {
             log::trace!("running core");
             self.firecmd("c")?;
+            ensure!(self.recvdata()? == GDBResponse::Ack);
             self.halted = false;
         }
 
@@ -490,5 +505,21 @@ impl Core for GDBCore {
 
     fn wait_for_halt(&mut self, _dur: std::time::Duration) -> Result<()> {
         bail!("Wait for halt is not supported with GDB");
+    }
+
+    fn op_start(&mut self) -> Result<()> {
+        log::trace!("op_start: halting core");
+        self.halt()
+    }
+
+    fn op_done(&mut self) -> Result<()> {
+        log::trace!("was halted: {}", self.was_halted);
+        if !self.was_halted {
+            log::trace!("op_done: resuming core");
+            self.run()?;
+        } else {
+            log::trace!("op_done: leaving core halted");
+        }
+        Ok(())
     }
 }

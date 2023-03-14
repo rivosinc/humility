@@ -2372,6 +2372,7 @@ dependencies = [
  "scroll",
  "serde",
  "serde_json",
+ "strum_macros 0.22.0",
  "thiserror",
  "toml 0.5.11",
  "winapi",
