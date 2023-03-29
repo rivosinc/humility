@@ -55,9 +55,13 @@ struct GdbArgs {
     #[clap(long, short)]
     skip_check: bool,
 
+    /// what gdb target to connect on
+    #[clap(long, short, default_value = ":3333")]
+    target: String,
+
     /// what gdb port to connect on
-    #[clap(long, short, default_value = "3333")]
-    port: u16,
+    #[clap(long, short, conflicts_with = "target")]
+    port: Option<u16>,
 
     /// specifies the 'gdb' executable to run
     #[clap(long)]
@@ -193,6 +197,12 @@ pub fn gdb(context: &mut humility::ExecutionContext) -> Result<()> {
         None
     };
 
+    // lets extract our actual remote target
+    let target = match subargs.port {
+        None => subargs.target,
+        Some(port) => format!(":{}", port),
+    };
+
     // Alright, here's where it gets awkward.  We are either
     // - Running OpenOCD, launched by the block above
     // - Running OpenOCD in a separate terminal, through humility openocd
@@ -214,7 +224,7 @@ pub fn gdb(context: &mut humility::ExecutionContext) -> Result<()> {
         let image_id = hubris.image_id().unwrap();
         cmd.arg("-q")
             .arg("-ex")
-            .arg(format!("target extended-remote :{}", subargs.port))
+            .arg(format!("target extended-remote {}", target))
             .arg("-ex")
             .arg(format!(
                 "dump binary memory image_id {} {}",
@@ -247,7 +257,7 @@ pub fn gdb(context: &mut humility::ExecutionContext) -> Result<()> {
         .arg("-x")
         .arg("script.gdb")
         .arg("-ex")
-        .arg(format!("target extended-remote :{}", subargs.port))
+        .arg(format!("target extended-remote {}", target))
         // print demangled symbols
         .arg("-ex")
         .arg("set print asm-demangle on")
