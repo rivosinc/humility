@@ -1620,7 +1620,7 @@ name = "humility-cmd-halt"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap",
+ "clap 3.2.23",
  "humility-cli",
  "humility-cmd",
  "humility-core",
@@ -1911,7 +1911,7 @@ name = "humility-cmd-qemu"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap",
+ "clap 3.2.23",
  "ctrlc",
  "goblin",
  "humility-cli",
@@ -2063,7 +2063,7 @@ name = "humility-cmd-resume"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap",
+ "clap 3.2.23",
  "humility-cli",
  "humility-cmd",
  "humility-core",

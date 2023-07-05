@@ -1,0 +1,401 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+mod archive;
+pub use archive::ArchiveCore;
+
+mod dump;
+pub use dump::DumpCore;
+
+mod gdb;
+pub use gdb::GDBCore;
+use gdb::GDBServer;
+
+mod openocd;
+pub use openocd::OpenOCDCore;
+
+mod probe;
+pub use probe::ProbeCore;
+
+mod unattached;
+pub use unattached::UnattachedCore;
+
+use probe_rs::Probe;
+
+use anyhow::{anyhow, bail, Result};
+
+use crate::hubris::*;
+use humility_arch_reg::Register;
+use std::convert::TryInto;
+use std::path::Path;
+use std::str;
+use std::time::Duration;
+use thiserror::Error;
+
+pub const CORE_MAX_READSIZE: usize = 65536; // 64K ought to be enough for anyone
+
+pub trait Core {
+    fn info(&self) -> (String, Option<String>);
+
+    fn vid_pid(&self) -> Option<(u16, u16)> {
+        None
+    }
+
+    fn read_8(&mut self, addr: u32, data: &mut [u8]) -> Result<()>;
+    fn read_reg(&mut self, reg: Register) -> Result<u32>;
+    fn write_reg(&mut self, reg: Register, value: u32) -> Result<()>;
+    fn init_swv(&mut self) -> Result<()>;
+    fn read_swv(&mut self) -> Result<Vec<u8>>;
+    fn write_word_32(&mut self, addr: u32, data: u32) -> Result<()>;
+    fn write_8(&mut self, addr: u32, data: &[u8]) -> Result<()>;
+
+    fn halt(&mut self) -> Result<()>;
+    fn run(&mut self) -> Result<()>;
+    fn step(&mut self) -> Result<()>;
+    fn is_dump(&self) -> bool {
+        false
+    }
+
+    fn is_net(&self) -> bool {
+        false
+    }
+
+    fn is_archive(&self) -> bool {
+        false
+    }
+
+    fn set_timeout(&mut self, _timeout: Duration) -> Result<()> {
+        Ok(())
+    }
+
+    fn read_word_32(&mut self, addr: u32) -> Result<u32> {
+        let mut buf = [0; 4];
+        self.read_8(addr, &mut buf)?;
+        Ok(u32::from_le_bytes(buf))
+    }
+
+    fn read_word_64(&mut self, addr: u32) -> Result<u64> {
+        let mut buf = [0; 8];
+        self.read_8(addr, &mut buf)?;
+        Ok(u64::from_le_bytes(buf))
+    }
+
+    ///
+    /// Called to load a flash image.
+    ///
+    fn load(&mut self, path: &Path) -> Result<()>;
+
+    /// Reset the chip
+    fn reset(&mut self) -> Result<()>;
+
+    /// Reset the chip and halt afterwards. Requires a timeout to wait for
+    /// halt
+    fn reset_and_halt(&mut self, dur: std::time::Duration) -> Result<()>;
+
+    /// Called before starting a series of operations.  May halt the target if
+    /// the target does not allow operations while not halted.  Should not be
+    /// intermixed with [`halt`]/[`run`].
+    fn op_start(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Called after completing a series of operations.  May run the target if
+    /// the target does not allow operations while not halted.  Should not be
+    /// intermixed with [`halt`]/[`run`].
+    fn op_done(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Wait `duration` seconds for the targe to halt.
+    fn wait_for_halt(&mut self, dur: std::time::Duration) -> Result<()>;
+
+    /// Send over network, if applicable
+    fn send(&self, _buf: &[u8], _agent: NetAgent) -> Result<usize> {
+        bail!("cannot send over network");
+    }
+
+    /// Receive from network, if applicable
+    fn recv(&self, _buf: &mut [u8], _agent: NetAgent) -> Result<usize> {
+        bail!("cannot receive from network");
+    }
+}
+
+/// Something that you can talk to on the network
+///
+/// `control-plane-agent` is deliberately skipped, because it's best talked to
+/// via `faux-mgs`.
+pub enum NetAgent {
+    UdpRpc,
+    DumpAgent,
+}
+
+#[derive(Error, Debug)]
+pub enum ProbeError {
+    #[error("no debug probe found; is it plugged in?")]
+    NoProbeFound,
+}
+
+fn parse_probe(probe: &str) -> (&str, Option<usize>) {
+    if probe.contains('-') {
+        let str = probe.to_owned();
+        let pieces: Vec<&str> = str.split('-').collect();
+
+        if pieces[0] == "usb" && pieces.len() == 2 {
+            if let Ok(val) = pieces[1].parse::<usize>() {
+                ("usb", Some(val))
+            } else {
+                (probe, None)
+            }
+        } else {
+            (probe, None)
+        }
+    } else {
+        (probe, None)
+    }
+}
+
+fn get_usb_probe(index: Option<usize>) -> Result<probe_rs::DebugProbeInfo> {
+    let probes = Probe::list_all();
+
+    if probes.is_empty() {
+        return Err(ProbeError::NoProbeFound.into());
+    }
+
+    if let Some(index) = index {
+        if index < probes.len() {
+            Ok(probes[index].clone())
+        } else {
+            bail!(
+                "index ({}) exceeds max probe index ({})",
+                index,
+                probes.len() - 1
+            );
+        }
+    } else if probes.len() == 1 {
+        Ok(probes[0].clone())
+    } else {
+        bail!(
+            "multiple USB probes detected; must \
+            explicitly append index (e.g., \"-p usb-0\")"
+        );
+    }
+}
+
+#[rustfmt::skip::macros(anyhow, bail)]
+pub fn attach_to_probe(probe: &str) -> Result<Box<dyn Core>> {
+    let (probe, index) = parse_probe(probe);
+
+    match probe {
+        "usb" => {
+            let probe_info = get_usb_probe(index)?;
+
+            let res = probe_info.open();
+
+            if let Err(probe_rs::DebugProbeError::Usb(Some(ref err))) = res {
+                if let Some(rcode) = err.downcast_ref::<rusb::Error>() {
+                    if *rcode == rusb::Error::Busy {
+                        bail!(
+                            "USB link in use; is OpenOCD or \
+                            another debugger running?"
+                        );
+                    }
+                }
+            }
+
+            let probe = res?;
+
+            crate::msg!("Opened probe {}", probe_info.identifier);
+            Ok(Box::new(UnattachedCore::new(
+                probe,
+                probe_info.identifier.clone(),
+                probe_info.vendor_id,
+                probe_info.product_id,
+                probe_info.serial_number,
+            )))
+        }
+        "ocd" | "ocdgdb" | "jlink" => {
+            bail!("Probe only attachment with {} is not supported", probe)
+        }
+        "auto" => attach_to_probe("usb"),
+        _ => match TryInto::<probe_rs::DebugProbeSelector>::try_into(probe) {
+            Ok(selector) => {
+                let vidpid = probe;
+                let vid = selector.vendor_id;
+                let pid = selector.product_id;
+                let serial = selector.serial_number.clone();
+                let probe = probe_rs::Probe::open(selector)?;
+                let name = probe.get_name();
+
+                crate::msg!("Opened {vidpid} via {name}");
+                Ok(Box::new(UnattachedCore::new(probe, name, vid, pid, serial)))
+            }
+            Err(_) => Err(anyhow!("unrecognized probe: {}", probe)),
+        },
+    }
+}
+
+#[rustfmt::skip::macros(anyhow, bail)]
+pub fn attach_to_chip(
+    probe: &str,
+    hubris: &HubrisArchive,
+    chip: Option<&str>,
+) -> Result<Box<dyn Core>> {
+    let (probe, index) = parse_probe(probe);
+
+    match probe {
+        "usb" => {
+            let probe_info = get_usb_probe(index)?;
+
+            let res = probe_info.open();
+
+            if let Err(probe_rs::DebugProbeError::Usb(Some(ref err))) = res {
+                if let Some(rcode) = err.downcast_ref::<rusb::Error>() {
+                    if *rcode == rusb::Error::Busy {
+                        bail!(
+                            "USB link in use; is OpenOCD or \
+                            another debugger running?"
+                        );
+                    }
+                }
+            }
+
+            let probe = res?;
+
+            let name = probe.get_name();
+
+            //
+            // probe-rs needs us to specify a chip that it knows about -- but
+            // it only really uses this information for flashing the part.  If
+            // we are attaching to the part for not pusposes of flashing, we
+            // specify a generic ARMv7-M (but then we also indicate that can't
+            // flash to assure that we can fail explicitly should flashing be
+            // attempted).
+            //
+            let (session, can_flash) = match chip {
+                Some(chip) => (probe.attach(chip)?, true),
+                None => (
+                    probe.attach(
+                        hubris.arch.as_ref().unwrap().get_generic_chip(),
+                    )?,
+                    false,
+                ),
+            };
+
+            crate::msg!("attached via {name}");
+
+            Ok(Box::new(ProbeCore::new(
+                session,
+                probe_info.identifier.clone(),
+                probe_info.vendor_id,
+                probe_info.product_id,
+                probe_info.serial_number,
+                hubris.unhalted_reads(),
+                can_flash,
+            )))
+        }
+
+        "ocd" => {
+            let core = OpenOCDCore::new()?;
+            crate::msg!("attached via OpenOCD");
+
+            Ok(Box::new(core))
+        }
+
+        "auto" => {
+            if let Ok(probe) = attach_to_chip("ocd", hubris, chip) {
+                return Ok(probe);
+            }
+
+            if let Ok(probe) = attach_to_chip("jlink", hubris, chip) {
+                return Ok(probe);
+            }
+
+            attach_to_chip("usb", hubris, chip)
+        }
+
+        "ocdgdb" => {
+            let core = GDBCore::new(GDBServer::OpenOCD)?;
+            crate::msg!("attached via OpenOCD's GDB server");
+
+            Ok(Box::new(core))
+        }
+
+        "jlink" => {
+            let core = GDBCore::new(GDBServer::JLink)?;
+            crate::msg!("attached via JLink");
+
+            Ok(Box::new(core))
+        }
+
+        _ => match TryInto::<probe_rs::DebugProbeSelector>::try_into(probe) {
+            Ok(selector) => {
+                let vidpid = probe;
+
+                let vid = selector.vendor_id;
+                let pid = selector.product_id;
+                let serial = selector.serial_number.clone();
+
+                let probe = probe_rs::Probe::open(selector)?;
+                let name = probe.get_name();
+
+                //
+                // See the block comment in the generic "usb" attach for
+                // why we use armv7m here.
+                //
+                let (session, can_flash) = match chip {
+                    Some(chip) => (probe.attach(chip)?, true),
+                    None => (
+                        probe.attach(
+                            hubris.arch.as_ref().unwrap().get_generic_chip(),
+                        )?,
+                        false,
+                    ),
+                };
+
+                crate::msg!("attached to {vidpid} via {name}");
+
+                Ok(Box::new(ProbeCore::new(
+                    session,
+                    name,
+                    vid,
+                    pid,
+                    serial,
+                    hubris.unhalted_reads(),
+                    can_flash,
+                )))
+            }
+            Err(_) => Err(anyhow!("unrecognized probe: {probe}")),
+        },
+    }
+}
+
+pub fn attach_for_flashing(
+    probe: &str,
+    hubris: &HubrisArchive,
+    chip: &str,
+) -> Result<Box<dyn Core>> {
+    attach_to_chip(probe, hubris, Some(chip))
+}
+
+pub fn attach(probe: &str, hubris: &HubrisArchive) -> Result<Box<dyn Core>> {
+    match hubris.chip() {
+        Some(s) => attach_to_chip(probe, hubris, Some(&s)),
+        None => attach_to_chip(probe, hubris, None),
+    }
+}
+
+pub fn attach_dump(
+    dump: &str,
+    hubris: &HubrisArchive,
+) -> Result<Box<dyn Core>> {
+    let core = DumpCore::new(dump, hubris)?;
+    crate::msg!("attached to dump");
+    Ok(Box::new(core))
+}
+
+pub fn attach_archive(hubris: &HubrisArchive) -> Result<Box<dyn Core>> {
+    let core = ArchiveCore::new(hubris)?;
+    crate::msg!("attached to archive");
+    Ok(Box::new(core))
+}
