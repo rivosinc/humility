@@ -310,6 +310,9 @@ pub fn attach_to_chip(
             if let Ok(probe) = attach_to_chip("jlink", hubris, chip) {
                 return Ok(probe);
             }
+            if let Ok(probe) = attach_to_chip("qemu", hubris, chip) {
+                return Ok(probe);
+            }
 
             attach_to_chip("usb", hubris, chip)
         }
@@ -324,6 +327,13 @@ pub fn attach_to_chip(
         "jlink" => {
             let core = GDBCore::new(GDBServer::JLink)?;
             crate::msg!("attached via JLink");
+
+            Ok(Box::new(core))
+        }
+
+        "qemu" => {
+            let core = GDBCore::new(GDBServer::Qemu)?;
+            crate::msg!("attached via QEMU GDB server");
 
             Ok(Box::new(core))
         }
