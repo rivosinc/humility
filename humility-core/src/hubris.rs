@@ -1692,7 +1692,10 @@ impl HubrisArchive {
             anyhow!("failed to parse {} as an ELF file: {}", dumpfile, e)
         })?;
 
-        self.arch = Some(get_arch(elf.header.e_machine));
+        self.arch = Some(get_arch(
+            elf.header.e_machine,
+            elf.header.e_ident[goblin::elf::header::EI_CLASS],
+        ));
 
         if let Some(notes) = elf.iter_note_headers(&contents) {
             for note in notes {
@@ -3824,7 +3827,10 @@ impl HubrisObjectLoader {
         // Load target architecture from elf, will be used for dissassembly
         // Determine 32bit vs 64bit
         // This will consume the box, and leave an owned dyn Arch object
-        self.arch = Some(get_arch(elf.header.e_machine));
+        self.arch = Some(get_arch(
+            elf.header.e_machine,
+            elf.header.e_ident[goblin::elf::header::EI_CLASS],
+        ));
 
         //Instantiate an appropriate capstone for the architecture
         let mut cs = self.arch.as_ref().unwrap().make_capstone().unwrap();
@@ -4034,8 +4040,11 @@ impl HubrisObjectLoader {
         self.load_object_dwarf(buffer, &elf)
             .context(format!("{}: failed to load DWARF", object))?;
 
-        self.load_object_frames(task, buffer, &elf)
-            .context(format!("{}: failed to load debug frames", object))?;
+        if self.load_object_frames(task, buffer, &elf).is_err() {
+            log::trace!(
+                "could not load .debug_frame: stack info will be unavaliable"
+            );
+        }
 
         let iface = self.load_object_idolatry(object, buffer, &elf)?;
 

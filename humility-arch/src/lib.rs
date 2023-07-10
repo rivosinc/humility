@@ -10,6 +10,8 @@ use std::fmt::Debug;
 
 pub mod arm;
 use arm::ARMArch;
+pub mod rv;
+use rv::RVArch;
 
 #[derive(Copy, Clone, Debug)]
 pub enum InstrTarget {
@@ -127,9 +129,10 @@ impl Debug for dyn Arch {
     }
 }
 
-pub fn get_arch(arch: u16) -> Box<dyn Arch> {
+pub fn get_arch(arch: u16, abi_size: u8) -> Box<dyn Arch> {
     match arch {
         goblin::elf::header::EM_ARM => Box::new(ARMArch::new()),
+        goblin::elf::header::EM_RISCV => Box::new(RVArch::new(abi_size)),
         _ => unimplemented!(),
     }
 }
@@ -161,6 +164,11 @@ pub fn instr_source_target(
         ArchDetail::ArmDetail(_detail) => {
             let source = source_id.map(|id| Register::Arm((*id).into()));
             let target = target_id.map(|id| Register::Arm((*id).into()));
+            (source, target)
+        }
+        ArchDetail::RiscVDetail(_detail) => {
+            let source = source_id.map(|id| Register::RiscV((*id).into()));
+            let target = target_id.map(|id| Register::RiscV((*id).into()));
             (source, target)
         }
         _ => unimplemented!(),
