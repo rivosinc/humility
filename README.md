@@ -162,7 +162,8 @@ which can have the following values:
   running GDB and continue from the resulting stop.
 
 - `qemu`: Attach via Qemu's GDB server, which is presumed to have the interface 
-  available on localhost:3333.  Currently, reading registers does NOT work.
+  available on localhost:3333.  You can also specify the port by using 
+  `qemu-<port>`.Currently, reading registers does NOT work.
 
 - `usb`: Attach directly via USB to a debug probe.  When multiple probes
   are plugged in via USB, a probe index must be specified as a suffix
