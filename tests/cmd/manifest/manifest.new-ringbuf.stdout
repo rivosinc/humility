@@ -2,7 +2,6 @@
      git rev => d9d369907370359892db88134e987b8deead3644-dirty
     image id => [b6, 6d, 98, 7c, 94, fe, 22, 39]
        board => sidecar-a
-        name => sidecar-a
       target => thumbv7em-none-eabihf
     features => itm
   total size => 911K
