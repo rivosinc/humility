@@ -24,7 +24,7 @@ use std::time::Instant;
 use crate::{msg, warn};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use fallible_iterator::FallibleIterator;
-use gimli::UnwindSection;
+use gimli::{Reader, UnwindSection};
 use goblin::elf::Elf;
 use humpty::DumpTask;
 use idol::syntax::Interface;
@@ -2843,7 +2843,7 @@ impl HubrisArchive {
 
         loop {
             let bases = gimli::BaseAddresses::default();
-            let mut ctx = gimli::UninitializedUnwindContext::new();
+            let mut ctx = gimli::UnwindContext::new();
             let pc =
                 *frameregs.get(&self.arch.as_ref().unwrap().get_pc()).unwrap();
 
@@ -4186,8 +4186,6 @@ impl HubrisObjectLoader {
                     Ok(&[])
                 }
             },
-            // We don't have a supplemental object file.
-            |_| Ok(&[]),
         )?;
 
         // Borrow all sections wrapped in EndianSlices
@@ -5184,7 +5182,10 @@ impl HubrisObjectLoader {
                 gimli::AttributeValue::RangeListsRef(r),
             ) = (attr.name(), attr.value())
             {
-                let raw_ranges = dwarf.ranges.raw_ranges(r, unit.encoding())?;
+                let raw_ranges = dwarf.ranges.raw_ranges(
+                    dwarf.ranges_offset_from_raw(unit, r),
+                    unit.encoding(),
+                )?;
                 let raw_ranges: Vec<_> = raw_ranges.collect()?;
 
                 for r in raw_ranges {
