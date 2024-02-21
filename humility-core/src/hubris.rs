@@ -4515,8 +4515,26 @@ impl HubrisObjectLoader {
                 }
 
                 gimli::constants::DW_AT_data_member_location => {
-                    if let gimli::AttributeValue::Udata(value) = attr.value() {
-                        offset = Some(value as usize)
+                    match attr.value() {
+                        gimli::AttributeValue::Udata(value) => {
+                            offset = Some(value as usize)
+                        }
+                        gimli::AttributeValue::Exprloc(
+                            gimli::read::Expression(data),
+                        ) => {
+                            if data.len() > 0
+                                && data[0]
+                                    == gimli::constants::DW_OP_plus_uconst.0
+                            {
+                                let mut data = data.range_from(1..);
+                                offset = Some(
+                                    data.read_uleb128()
+                                        .context("Failed to parse ULEB128")?
+                                        as usize,
+                                );
+                            }
+                        }
+                        _ => {}
                     }
                 }
 
