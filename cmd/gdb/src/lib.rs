@@ -56,8 +56,12 @@ struct GdbArgs {
     skip_check: bool,
 
     /// what gdb port to connect on
-    #[clap(long, short, default_value = "3333")]
+    #[clap(long, short, default_value = "3333", group = "connection")]
     port: u16,
+
+    /// what gdb socket to connect on
+    #[clap(long, group = "connection")]
+    socket: Option<String>,
 
     /// specifies the 'gdb' executable to run
     #[clap(long)]
@@ -192,6 +196,10 @@ pub fn gdb(context: &mut ExecutionContext) -> Result<()> {
     } else {
         None
     };
+    let target_arg = match subargs.socket {
+        Some(socket) => socket,
+        _ => format!(":{}", subargs.port),
+    };
 
     // Alright, here's where it gets awkward.  We are either
     // - Running OpenOCD, launched by the block above
@@ -214,7 +222,7 @@ pub fn gdb(context: &mut ExecutionContext) -> Result<()> {
         let image_id = hubris.image_id().unwrap();
         cmd.arg("-q")
             .arg("-ex")
-            .arg(format!("target extended-remote :{}", subargs.port))
+            .arg(format!("target extended-remote {}", target_arg))
             .arg("-ex")
             .arg(format!(
                 "dump binary memory image_id {} {}",
@@ -247,7 +255,7 @@ pub fn gdb(context: &mut ExecutionContext) -> Result<()> {
         .arg("-x")
         .arg("script.gdb")
         .arg("-ex")
-        .arg(format!("target extended-remote :{}", subargs.port))
+        .arg(format!("target extended-remote {}", target_arg))
         // print demangled symbols
         .arg("-ex")
         .arg("set print asm-demangle on")
