@@ -4823,14 +4823,15 @@ impl HubrisObjectLoader {
             }
         }
 
-        if let (Some(name), Some(dgoff), Some(size)) = (name, dgoff, size) {
+        if let (Some(name), Some(size)) = (name, size) {
             self.enums.insert(
                 goff,
                 HubrisEnum {
                     name: name.to_string(),
                     goff,
                     size,
-                    discriminant: Some(HubrisDiscriminant::Value(dgoff, 0)),
+                    discriminant: dgoff
+                        .map(|dgoff| HubrisDiscriminant::Value(dgoff, 0)),
                     tag: None,
                     variants: Vec::new(),
                     namespace,
