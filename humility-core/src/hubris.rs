@@ -5149,8 +5149,9 @@ impl HubrisObjectLoader {
         // Iterate over our attributes looking for addresses
         //
         let mut attrs = entry.attrs();
-        let mut low: Option<u64> = None;
-        let mut high: Option<u64> = None;
+        let mut begin: Option<u64> = None;
+        let mut end: Option<u64> = None;
+        let mut len: Option<u64> = None;
         let mut origin: Option<HubrisGoff> = None;
 
         let goff = self.dwarf_goff(unit, entry);
@@ -5161,13 +5162,21 @@ impl HubrisObjectLoader {
                     gimli::constants::DW_AT_low_pc,
                     gimli::AttributeValue::Addr(addr),
                 ) => {
-                    low = Some(addr);
+                    begin = Some(addr);
                 }
                 (
                     gimli::constants::DW_AT_high_pc,
                     gimli::AttributeValue::Udata(data),
                 ) => {
-                    high = Some(data);
+                    // high pc is used as length
+                    len = Some(data);
+                }
+                (
+                    gimli::constants::DW_AT_high_pc,
+                    gimli::AttributeValue::Addr(addr),
+                ) => {
+                    // high pc is used as end address
+                    end = Some(addr);
                 }
                 (gimli::constants::DW_AT_abstract_origin, _) => {
                     origin = self.dwarf_value_goff(unit, &attr.value());
@@ -5176,16 +5185,25 @@ impl HubrisObjectLoader {
             }
         }
 
-        let origin = match (low, high, origin) {
-            (Some(addr), Some(len), Some(origin)) => {
-                // If we've got the low and high defined, we'll just go ahead
+        let origin = match (begin, end, len, origin) {
+            (Some(addr), None, Some(len), Some(origin)) => {
+                // If we've got the begin and len defined, we'll just go ahead
                 // and terminate here.
                 self.inlined
                     .insert((addr as u32, depth), (len as u32, goff, origin));
 
                 return Ok(());
             }
-            (None, None, Some(o)) => {
+            (Some(addr), Some(end), None, Some(origin)) => {
+                // If we've got the begin and end defined, we'll just go ahead
+                // and terminate here.
+                let len = end - addr;
+                self.inlined
+                    .insert((addr as u32, depth), (len as u32, goff, origin));
+
+                return Ok(());
+            }
+            (None, None, None, Some(o)) => {
                 // Otherwise, unwrap origin so it can be used below.
                 o
             }
