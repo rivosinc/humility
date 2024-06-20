@@ -27,7 +27,7 @@ jobs:
         os: [ubuntu-latest]
         include:
           - os: ubuntu-latest
-            deps: sudo apt-get update && sudo apt-get install libusb-1.0-0-dev libftdi1-dev libudev-dev
+            deps: sudo apt-get update && sudo apt-get install libusb-1.0-0-dev libftdi1-dev libudev-dev qemu-system-misc
          #- os: windows-latest
          #  deps: vcpkg install libusb libftdi1
     runs-on: ${{ matrix.os }}

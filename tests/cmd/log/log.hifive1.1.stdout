@@ -1,0 +1,5 @@
+humility: stringbuf ringbuf::stringbuf::LOG__STRINGBUF in jefe:
+t address 0x0
+924: Task #2 Illegal instruction
+927: Task #2 Memory fault at address 0x0
+930: Task #2 Illegal instruction

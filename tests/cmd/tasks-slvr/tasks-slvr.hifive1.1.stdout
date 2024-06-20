@@ -1,0 +1,257 @@
+system time = 930
+ID TASK                       GEN PRI STATE    
+ 0 jefe                         0   0 recv, notif: bit0 bit1(T+70)
+   stack unwind failed: task Task(0) not present in image 
+   |
+   +--->   PC = 0x20015f9e   RA = 0x200145d0   SP = 0x80000c90   GP = 0x80000c00
+   |       TP = 0x00000000   T0 = 0x00000018   T1 = 0x200163dc   T2 = 0x80000e00
+   |       S0 = 0x80000d4b   S1 = 0x00000004   A0 = 0x80000d50   A1 = 0x00000008
+   |       A2 = 0x00000003   A3 = 0x00000000   A4 = 0x80000da0   A5 = 0x00000000
+   |       A6 = 0x00000000   A7 = 0x00000001   S2 = 0x80000da0   S3 = 0x80000e54
+   |       S4 = 0x80000e18   S5 = 0x000003e8   S6 = 0x0000ffff   S7 = 0x00000003
+   |       S8 = 0x80000d4e   S9 = 0x00000001  S10 = 0x00000004  S11 = 0x00000005
+   |       T3 = 0x80000c98   T4 = 0x00000002   T5 = 0x00000002   T6 = 0xbaddcafe
+
+   |
+   +-----------> Task {
+                    save: SavedState {
+                        ra: 0x200145d0,
+                        sp: 0x80000c90,
+                        gp: 0x80000c00,
+                        tp: 0x0,
+                        t0: 0x18,
+                        t1: 0x200163dc,
+                        t2: 0x80000e00,
+                        s0: 0x80000d4b,
+                        s1: 0x4,
+                        a0: 0x80000d50,
+                        a1: 0x8,
+                        a2: 0x3,
+                        a3: 0x0,
+                        a4: 0x80000da0,
+                        a5: 0x0,
+                        a6: 0x0,
+                        a7: 0x1,
+                        s2: 0x80000da0,
+                        s3: 0x80000e54,
+                        s4: 0x80000e18,
+                        s5: 0x3e8,
+                        s6: 0xffff,
+                        s7: 0x3,
+                        s8: 0x80000d4e,
+                        s9: 0x1,
+                        s10: 0x4,
+                        s11: 0x5,
+                        t3: 0x80000c98,
+                        t4: 0x2,
+                        t5: 0x2,
+                        t6: 0xbaddcafe,
+                        pc: 0x20015f9e
+                    },
+                    priority: Priority(0x0),
+                    state: Healthy(InRecv(None)),
+                    timer: TimerState {
+                        deadline: Some(Timestamp(0x3e8)),
+                        to_post: NotificationSet(0x2)
+                    },
+                    generation: 0x0,
+                    region_table: &[&abi::RegionDesc] {
+                        data_ptr: 0x80000738 (<UNNAMED>),
+                        length: 0x8
+                    },
+                    notifications: 0x0,
+                    descriptor: 0x20013778 (&abi::TaskDesc)
+                }
+
+ 1 pong                         0   3 ready
+   stack unwind failed: task Task(1) not present in image 
+   |
+   +--->   PC = 0x20017922   RA = 0x20017880   SP = 0x80001580   GP = 0x00000000
+   |       TP = 0x00000000   T0 = 0x800015e0   T1 = 0x800015e0   T2 = 0x800015e0
+   |       S0 = 0x0000ffff   S1 = 0x00006dc6   A0 = 0x00000000   A1 = 0x00006802
+   |       A2 = 0x00000001   A3 = 0x00000005   A4 = 0x00000010   A5 = 0x00000000
+   |       A6 = 0x00000000   A7 = 0x00000001   S2 = 0x800015a8   S3 = 0x00000000
+   |       S4 = 0x2001799c   S5 = 0x000003e8   S6 = 0x00000000   S7 = 0x00000000
+   |       S8 = 0x00000000   S9 = 0x00000000  S10 = 0x00000000  S11 = 0x00000000
+   |       T3 = 0x00000000   T4 = 0x00000000   T5 = 0x00000000   T6 = 0x00000000
+
+   |
+   +-----------> Task {
+                    save: SavedState {
+                        ra: 0x20017880,
+                        sp: 0x80001580,
+                        gp: 0x0,
+                        tp: 0x0,
+                        t0: 0x800015e0,
+                        t1: 0x800015e0,
+                        t2: 0x800015e0,
+                        s0: 0xffff,
+                        s1: 0x6dc6,
+                        a0: 0x0,
+                        a1: 0x6802,
+                        a2: 0x1,
+                        a3: 0x5,
+                        a4: 0x10,
+                        a5: 0x0,
+                        a6: 0x0,
+                        a7: 0x1,
+                        s2: 0x800015a8,
+                        s3: 0x0,
+                        s4: 0x2001799c,
+                        s5: 0x3e8,
+                        s6: 0x0,
+                        s7: 0x0,
+                        s8: 0x0,
+                        s9: 0x0,
+                        s10: 0x0,
+                        s11: 0x0,
+                        t3: 0x0,
+                        t4: 0x0,
+                        t5: 0x0,
+                        t6: 0x0,
+                        pc: 0x20017922
+                    },
+                    priority: Priority(0x3),
+                    state: Healthy(Runnable),
+                    timer: TimerState {
+                        deadline: Some(Timestamp(0x3e8)),
+                        to_post: NotificationSet(0x1)
+                    },
+                    generation: 0x0,
+                    region_table: &[&abi::RegionDesc] {
+                        data_ptr: 0x80000758 (<UNNAMED>),
+                        length: 0x8
+                    },
+                    notifications: 0x0,
+                    descriptor: 0x2001378c (&abi::TaskDesc)
+                }
+
+ 2 ping                       282   4 wait: reply from pong/gen0
+   stack unwind failed: task Task(2) not present in image 
+   |
+   +--->   PC = 0x20018684   RA = 0x20017a94   SP = 0x80001180   GP = 0x00000000
+   |       TP = 0x00000000   T0 = 0x80001260   T1 = 0x80001260   T2 = 0x800011e0
+   |       S0 = 0x20018b18   S1 = 0x200189d0   A0 = 0x00010001   A1 = 0x200189d0
+   |       A2 = 0x00000005   A3 = 0x80001190   A4 = 0x00000010   A5 = 0x20018b18
+   |       A6 = 0x00000000   A7 = 0x00000000   S2 = 0x00000005   S3 = 0x80001190
+   |       S4 = 0x00000010   S5 = 0x00010001   S6 = 0x00000064   S7 = 0x00000000
+   |       S8 = 0x00000000   S9 = 0x00000000  S10 = 0x00000000  S11 = 0x00000000
+   |       T3 = 0x00000000   T4 = 0x00000000   T5 = 0x00000000   T6 = 0x00000000
+
+   |
+   +-----------> Task {
+                    save: SavedState {
+                        ra: 0x20017a94,
+                        sp: 0x80001180,
+                        gp: 0x0,
+                        tp: 0x0,
+                        t0: 0x80001260,
+                        t1: 0x80001260,
+                        t2: 0x800011e0,
+                        s0: 0x20018b18,
+                        s1: 0x200189d0,
+                        a0: 0x10001,
+                        a1: 0x200189d0,
+                        a2: 0x5,
+                        a3: 0x80001190,
+                        a4: 0x10,
+                        a5: 0x20018b18,
+                        a6: 0x0,
+                        a7: 0x0,
+                        s2: 0x5,
+                        s3: 0x80001190,
+                        s4: 0x10,
+                        s5: 0x10001,
+                        s6: 0x64,
+                        s7: 0x0,
+                        s8: 0x0,
+                        s9: 0x0,
+                        s10: 0x0,
+                        s11: 0x0,
+                        t3: 0x0,
+                        t4: 0x0,
+                        t5: 0x0,
+                        t6: 0x0,
+                        pc: 0x20018684
+                    },
+                    priority: Priority(0x4),
+                    state: Healthy(InReply(TaskId(0x1))),
+                    timer: TimerState {
+                        deadline: None,
+                        to_post: NotificationSet(0x0)
+                    },
+                    generation: 0x11a,
+                    region_table: &[&abi::RegionDesc] {
+                        data_ptr: 0x80000778 (<UNNAMED>),
+                        length: 0x8
+                    },
+                    notifications: 0x0,
+                    descriptor: 0x200137a0 (&abi::TaskDesc)
+                }
+
+ 3 idle                         0   5 ready
+   |
+   +--->  0x80000fe0 0x20017750 _start
+   |                 @ /hubris/sys/userlib/src/arch/riscv32.rs:20
+   |
+   |
+   +--->   PC = 0x20017750   RA = 0x00000000   SP = 0x80000fe0   GP = 0x00000000
+   |       TP = 0x00000000   T0 = 0x00000000   T1 = 0x00000000   T2 = 0x00000000
+   |       S0 = 0x00000000   S1 = 0x00000000   A0 = 0x00000000   A1 = 0x00000000
+   |       A2 = 0x00000000   A3 = 0x00000000   A4 = 0x00000000   A5 = 0x00000000
+   |       A6 = 0x00000000   A7 = 0x00000000   S2 = 0x00000000   S3 = 0x00000000
+   |       S4 = 0x00000000   S5 = 0x00000000   S6 = 0x00000000   S7 = 0x00000000
+   |       S8 = 0x00000000   S9 = 0x00000000  S10 = 0x00000000  S11 = 0x00000000
+   |       T3 = 0x00000000   T4 = 0x00000000   T5 = 0x00000000   T6 = 0x00000000
+
+   |
+   +-----------> Task {
+                    save: SavedState {
+                        ra: 0x0,
+                        sp: 0x80000fe0,
+                        gp: 0x0,
+                        tp: 0x0,
+                        t0: 0x0,
+                        t1: 0x0,
+                        t2: 0x0,
+                        s0: 0x0,
+                        s1: 0x0,
+                        a0: 0x0,
+                        a1: 0x0,
+                        a2: 0x0,
+                        a3: 0x0,
+                        a4: 0x0,
+                        a5: 0x0,
+                        a6: 0x0,
+                        a7: 0x0,
+                        s2: 0x0,
+                        s3: 0x0,
+                        s4: 0x0,
+                        s5: 0x0,
+                        s6: 0x0,
+                        s7: 0x0,
+                        s8: 0x0,
+                        s9: 0x0,
+                        s10: 0x0,
+                        s11: 0x0,
+                        t3: 0x0,
+                        t4: 0x0,
+                        t5: 0x0,
+                        t6: 0x0,
+                        pc: 0x20017750
+                    },
+                    priority: Priority(0x5),
+                    state: Healthy(Runnable),
+                    timer: TimerState {
+                        deadline: None,
+                        to_post: NotificationSet(0x0)
+                    },
+                    generation: 0x0,
+                    region_table: &[&abi::RegionDesc] {
+                        data_ptr: 0x80000798 (<UNNAMED>),
+                        length: 0x8
+                    },
+                    notifications: 0x0,
+                    descriptor: 0x200137b4 (&abi::TaskDesc)
+                }
+

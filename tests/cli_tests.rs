@@ -7,6 +7,7 @@ use std::fmt::Write;
 use std::fs::{self, File};
 use std::path::Path;
 
+#[derive(Debug, Clone)]
 struct Test {
     name: &'static str,
     cmd: &'static str,
@@ -28,7 +29,7 @@ impl Test {
 }
 
 fn make_tests() -> Result<()> {
-    let postmortem = [
+    let all_tests = [
         Test::witharg("extract", "extract", "app.toml"),
         Test::witharg("extract-list", "extract", "--list"),
         Test::basic("manifest"),
@@ -45,6 +46,34 @@ fn make_tests() -> Result<()> {
         Test::basic("tasks"),
         Test::witharg("tasks-slvr", "tasks", "-slvr"),
         Test::basic("log"),
+        // don't need to rerun all of the cmds, just try to exercise each component of the core,
+        // registers, memory, start, stop
+        // also run each qemu command with the a different port so they can be parallelized
+        Test::witharg(
+            "qemu-readvar",
+            "qemu",
+            // these strings are weird since we have to escape the string so it is correctly
+            // written to the toml, but the toml itself also needs the escape characters for when
+            // it is parsed.
+            "--port 3333 --command \\\"readvar CLOCK_FREQ_KHZ\\\"",
+        ),
+        Test::witharg(
+            "qemu-halt",
+            "qemu",
+            " --port 3334 --command \\\"halt\\\"",
+        ),
+        Test::witharg(
+            "qemu-resume",
+            "qemu",
+            "--port 3335 --command \\\"resume\\\"",
+        ),
+        Test::witharg(
+            "qemu-dump",
+            "qemu",
+            "--port 3336 --command \\\"dump\\\"",
+        ),
+        //TODO how to verify halt/resume actually work
+        //TODO a write test might also be useful
     ];
 
     let mut cores = vec![];
@@ -67,7 +96,7 @@ fn make_tests() -> Result<()> {
         }
     }
 
-    for test in &postmortem {
+    for test in &all_tests {
         let dirpath = format!("./tests/cmd/{}", test.name);
         let dir = Path::new(&dirpath);
 

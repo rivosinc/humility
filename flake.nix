@@ -7,6 +7,9 @@
   inputs.rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
   inputs.rust-overlay.inputs.flake-utils.follows = "flake-utils";
 
+  inputs.qemuflake.url = "git+https://github.com/rivosinc/qemu?submodules=1&ref=dev/drew/nix";
+  inputs.qemuflake.inputs.nixpkgs.follows = "nixpkgs";
+
   inputs.pre-commit-hooks.url = "github:cachix/pre-commit-hooks.nix";
   inputs.pre-commit-hooks.inputs.flake-utils.follows = "flake-utils";
   inputs.pre-commit-hooks.inputs.nixpkgs.follows = "nixpkgs";
@@ -14,11 +17,12 @@
   outputs = {
     self,
     nixpkgs,
+    qemuflake,
     rust-overlay,
     pre-commit-hooks,
     flake-utils,
   }: (flake-utils.lib.eachDefaultSystem (system: let
-    overlays = [(import rust-overlay)];
+    overlays = [(import rust-overlay)] ++ nixpkgs.lib.optional (system != "aarch64-darwin") qemuflake.overlays.default;
 
     pkgs = import nixpkgs {
       inherit system overlays;
@@ -30,6 +34,7 @@
       cargo = rust;
       rustc = rust;
       humility = final.callPackage ./humility.nix {
+        qemu = pkgs.qemu;
         cargo = rust;
         src = self;
         version = "0.9.5";
