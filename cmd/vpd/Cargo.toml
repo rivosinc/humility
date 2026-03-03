@@ -16,6 +16,6 @@ idol = {git = "https://github.com/oxidecomputer/idolatry.git"}
 log = {version = "0.4.8", features = ["std"]}
 tlvc = {git = "https://github.com/oxidecomputer/tlvc"}
 tlvc-text = {git = "https://github.com/oxidecomputer/tlvc"}
-zerocopy = "0.6.1"
+zerocopy = "0.6.6"
 indicatif = "0.15"
 colored = "2.0.0"
